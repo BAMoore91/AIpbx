@@ -72,7 +72,7 @@ const schema = z.object({
   is_active: z.boolean(),
   tools: toolsSchema,
 });
-type FormData = z.infer<typeof schema>;
+type AgentFormData = z.infer<typeof schema>;
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -221,7 +221,7 @@ function AgentBuilderModal({
   open: boolean;
   onClose: () => void;
   editing: AIAgent | null;
-  onSave: (d: FormData) => void;
+  onSave: (d: AgentFormData) => void;
   saving: boolean;
 }) {
   const [builderTab, setBuilderTab] = useState<'core' | 'voice' | 'tools' | 'advanced'>('core');
@@ -232,7 +232,7 @@ function AgentBuilderModal({
     enabled: open,
   });
 
-  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<AgentFormData>({
     resolver: zodResolver(schema),
     defaultValues: {
       model: 'claude-opus-4-8',
@@ -479,7 +479,7 @@ export default function AIAgents() {
   });
 
   const upsert = useMutation({
-    mutationFn: (d: FormData) => editing ? aiAgentsApi.update(editing.id, d) : aiAgentsApi.create(d),
+    mutationFn: (d: AgentFormData) => editing ? aiAgentsApi.update(editing.id, d) : aiAgentsApi.create(d),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['ai-agents'] });
       setBuilderOpen(false);

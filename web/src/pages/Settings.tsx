@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Settings as SettingsIcon, Plus, Trash2, Globe, User, Webhook, Bell, Shield } from 'lucide-react';
+import { Settings as SettingsIcon, Plus, Trash2, Globe, User, Webhook as WebhookIcon, Shield } from 'lucide-react';
 import { webhooksApi, authApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { Input, Textarea, Toggle } from '@/components/FormFields';
@@ -208,7 +208,7 @@ export default function Settings() {
   const tabs: Array<{ id: SettingsTab; label: string; icon: React.ElementType }> = [
     { id: 'profile', label: 'Profile', icon: User },
     { id: 'tenant', label: 'Tenant', icon: Globe },
-    { id: 'webhooks', label: 'Webhooks', icon: Webhook },
+    { id: 'webhooks', label: 'Webhooks', icon: WebhookIcon },
     { id: 'security', label: 'Security', icon: Shield },
   ];
 

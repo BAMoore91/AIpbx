@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import {
-  PhoneCall, PhoneIncoming, PhoneOutgoing, PhoneMissed,
+  PhoneCall, PhoneIncoming, PhoneOutgoing,
   Phone, ChevronLeft, Mic, Bot, User, ArrowRight,
   Search, Filter, Download,
 } from 'lucide-react';

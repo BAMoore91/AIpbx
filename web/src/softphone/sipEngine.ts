@@ -133,7 +133,8 @@ export function placeCall(target: string, extension: Extension) {
   session.on('ended', () => cleanupCall());
   session.on('failed', () => cleanupCall());
 
-  void extension; // used for future features
+  // extension parameter used for display_name context in future enhancements
+  console.debug('[SIP] placing call as', extension.display_name);
 }
 
 export function answerCall() {
