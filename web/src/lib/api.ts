@@ -121,6 +121,47 @@ export const queuesApi = {
   stats: (id: string) =>
     api.get<QueueStats>(`/queues/${id}/stats`).then((r) => r.data),
 };
+// ─── Carrier integrations (Twilio Elastic SIP Trunking) ──────────────────────
+export interface TwilioCredsInput {
+  accountSid: string;
+  authToken?: string;
+  apiKeySid?: string;
+  apiKeySecret?: string;
+}
+export interface TwilioNumber {
+  sid: string;
+  phoneNumber: string;
+  friendlyName: string | null;
+  voice: boolean;
+}
+export interface TwilioVerifyResult {
+  account: { friendlyName: string; status: string };
+  numbers: TwilioNumber[];
+}
+export interface TwilioConnectInput extends TwilioCredsInput {
+  label?: string;
+  transport?: 'udp' | 'tls';
+  importNumbers?: boolean;
+  assignNumbersOnTwilio?: boolean;
+  defaultDestType?: string;
+  defaultDestId?: string | null;
+}
+export interface TwilioConnectResult {
+  trunkId: string;
+  twilioTrunkSid: string;
+  terminationUri: string;
+  originationTarget: string;
+  numbersImported: number;
+  outboundRouteId: string;
+  numbers: Array<{ e164: string; sid: string }>;
+}
+export const twilioApi = {
+  verify: (body: TwilioCredsInput) =>
+    api.post<TwilioVerifyResult>('/integrations/twilio/verify', body).then((r) => r.data),
+  connect: (body: TwilioConnectInput) =>
+    api.post<TwilioConnectResult>('/integrations/twilio/connect', body).then((r) => r.data),
+};
+
 export const ivrMenusApi = crud<IVRMenu>('ivr_menus');
 export const timeConditionsApi = crud<TimeCondition>('time_conditions');
 export const aiAgentsApi = {

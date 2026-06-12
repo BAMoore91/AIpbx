@@ -15,6 +15,8 @@ sentiment, summaries), designed to deploy on **DigitalOcean** in minutes.
 ### Telephony core (Asterisk / PJSIP)
 - SIP extensions (softphone, desk phone, **WebRTC** browser phone)
 - SIP **trunks** (Twilio/Telnyx/Bandwidth/generic), DID inbound + outbound routing
+- **One-click Twilio** Elastic SIP Trunk auto-provisioning from Account SID + key
+  (creates the trunk, origination, termination, imports numbers — see [`docs/INTEGRATIONS.md`](docs/INTEGRATIONS.md))
 - **IVR / auto-attendant** (multi-level, TTS or uploaded greetings)
 - **Call queues** (ACD, strategies, SLA, position announcements, wrap-up)
 - **Ring groups**, **time conditions** (business hours), **voicemail** (+ email + transcription)
@@ -128,6 +130,7 @@ for the lowest voice latency.
 - `docs/ARCHITECTURE.md` — deep dive on call flow & AI pipeline
 - `docs/API.md` — REST + WebSocket reference
 - `docs/AI_AGENTS.md` — building AI voice agents
+- `docs/INTEGRATIONS.md` — carrier integrations (automatic Twilio SIP trunking)
 - `docs/OPERATIONS.md` — runbook, scaling, backups
 
 ## License

@@ -87,6 +87,9 @@ export class PjsipProvisioner {
       authPass: secret,
       remoteHost: trunk.host,
       remotePort: trunk.port,
+      // Trunks authenticate OUTBOUND to the carrier (e.g. Twilio challenges our
+      // INVITE); inbound is matched by source IP/origination, not auth.
+      outboundAuth: trunk.auth_type === 'userpass',
     });
     await this.reload();
   }
@@ -103,6 +106,7 @@ export class PjsipProvisioner {
     authPass: string;
     remoteHost?: string;
     remotePort?: number;
+    outboundAuth?: boolean;
   }): Promise<void> {
     try {
       await query(
@@ -119,10 +123,13 @@ export class PjsipProvisioner {
          ON CONFLICT (id) DO UPDATE SET username = EXCLUDED.username, password = EXCLUDED.password`,
         [p.endpoint, p.authUser, p.authPass],
       );
+      // Trunks use outbound_auth (we authenticate to the carrier); endpoints use
+      // inbound auth (the device authenticates to us).
+      const authCol = p.outboundAuth ? 'outbound_auth' : 'auth';
       await query(
-        `INSERT INTO ps_endpoints (id, transport, aors, auth, context, allow, disallow)
+        `INSERT INTO ps_endpoints (id, transport, aors, ${authCol}, context, allow, disallow)
          VALUES ($1, $2, $1, $1, $3, $4, 'all')
-         ON CONFLICT (id) DO UPDATE SET transport = EXCLUDED.transport, context = EXCLUDED.context, allow = EXCLUDED.allow`,
+         ON CONFLICT (id) DO UPDATE SET transport = EXCLUDED.transport, context = EXCLUDED.context, allow = EXCLUDED.allow, ${authCol} = $1`,
         [p.endpoint, p.transport, p.context, p.allow],
       );
     } catch (err) {

@@ -16,6 +16,11 @@ const ConfigSchema = z.object({
 
   apiPort: z.coerce.number().int().positive().default(3000),
 
+  // Public reachability — used to tell carriers (e.g. Twilio) where to send us.
+  publicIp: z.string().optional(),
+  domain: z.string().optional(),
+  sipPort: z.coerce.number().int().positive().default(5060),
+
   databaseUrl: z.string().min(1, 'DATABASE_URL is required'),
   redisUrl: z.string().min(1, 'REDIS_URL is required'),
 
@@ -69,6 +74,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const parsed = ConfigSchema.safeParse({
     nodeEnv: env.NODE_ENV,
     apiPort: env.API_PORT,
+    publicIp: env.PUBLIC_IP,
+    domain: env.DOMAIN,
+    sipPort: env.ASTERISK_SIP_PORT,
     databaseUrl: env.DATABASE_URL,
     redisUrl: env.REDIS_URL,
     jwt: {

@@ -9,6 +9,7 @@ import { mediaRoutes } from './media.js';
 import { messageRoutes } from './messages.js';
 import { dashboardRoutes } from './dashboard.js';
 import { controlRoutes } from './control.js';
+import { integrationRoutes } from './integrations.js';
 
 /** Mounts all v1 routes under the `/api` prefix. */
 export async function registerApiRoutes(
@@ -26,6 +27,7 @@ export async function registerApiRoutes(
       await messageRoutes(api);
       await dashboardRoutes(api);
       await controlRoutes(api, ari);
+      await integrationRoutes(api, ari);
     },
     { prefix: '/api' },
   );

@@ -3,10 +3,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Pencil, Trash2, Radio } from 'lucide-react';
+import { Plus, Pencil, Trash2, Radio, Zap } from 'lucide-react';
 import { trunksApi } from '@/lib/api';
 import { DataTable, Column } from '@/components/DataTable';
 import { Modal } from '@/components/Modal';
+import { TwilioConnectModal } from '@/components/TwilioConnectModal';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Input, Select, Toggle } from '@/components/FormFields';
 import { Badge } from '@/components/Badge';
@@ -33,6 +34,7 @@ export default function Trunks() {
   const qc = useQueryClient();
   const [page, setPage] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
+  const [twilioOpen, setTwilioOpen] = useState(false);
   const [editing, setEditing] = useState<Trunk | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Trunk | null>(null);
 
@@ -116,7 +118,12 @@ export default function Trunks() {
           </h1>
           <p className="text-sm text-surface-500 mt-0.5">{data?.total ?? 0} trunks configured</p>
         </div>
-        <button onClick={openCreate} className="btn-primary"><Plus size={16} /> New Trunk</button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setTwilioOpen(true)} className="btn-secondary inline-flex items-center gap-1.5">
+            <Zap size={16} className="text-accent-500" /> Connect Twilio
+          </button>
+          <button onClick={openCreate} className="btn-primary"><Plus size={16} /> New Trunk</button>
+        </div>
       </div>
 
       <DataTable
@@ -181,6 +188,12 @@ export default function Trunks() {
         title="Delete Trunk"
         message={`Delete trunk "${deleteTarget?.name}"? Any DIDs assigned to this trunk will lose routing.`}
         loading={deleteMut.isPending}
+      />
+
+      <TwilioConnectModal
+        open={twilioOpen}
+        onClose={() => setTwilioOpen(false)}
+        onConnected={() => qc.invalidateQueries({ queryKey: ['trunks'] })}
       />
     </div>
   );
