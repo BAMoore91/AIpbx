@@ -2,8 +2,25 @@ import type { FastifyInstance } from 'fastify';
 import type { QueryResultRow } from 'pg';
 import { registerCrud } from './crud.js';
 import * as S from './schemas.js';
+import { queryOne } from '../db.js';
+import { conflict } from '../errors.js';
 import type { AriController } from '../ari/controller.js';
 import type { ExtensionRow, TrunkRow } from '../types/db.js';
+
+/** Enforce the tenant's licensed extension ceiling before creating one. */
+async function enforceExtensionLimit(tenantId: string): Promise<void> {
+  const row = await queryOne<{ used: string; max_extensions: number }>(
+    `SELECT (SELECT count(*) FROM extensions WHERE tenant_id = $1) AS used,
+            t.max_extensions
+     FROM tenants t WHERE t.id = $1`,
+    [tenantId],
+  );
+  if (row && Number(row.used) >= row.max_extensions) {
+    throw conflict(
+      `Extension limit reached (${row.max_extensions}). Upgrade the tenant plan to add more.`,
+    );
+  }
+}
 
 /**
  * Wires up CRUD routes for all tenant-scoped resources. Extensions and trunks
@@ -21,7 +38,8 @@ export function registerResourceRoutes(
     table: 'extensions',
     createSchema: S.extensionCreate,
     updateSchema: S.extensionUpdate,
-    beforeCreate: (data) => {
+    beforeCreate: async (data, tenantId) => {
+      await enforceExtensionLimit(tenantId);
       const d = data as Record<string, unknown>;
       return { ...d, sip_password: crypto.encrypt(String(d.sip_password)) };
     },

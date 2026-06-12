@@ -31,6 +31,7 @@ const Voicemail      = lazy(() => import('./pages/Voicemail'));
 const Messages       = lazy(() => import('./pages/Messages'));
 const Reports        = lazy(() => import('./pages/Reports'));
 const Settings       = lazy(() => import('./pages/Settings'));
+const Tenants        = lazy(() => import('./pages/Tenants'));
 
 function PageLoader() {
   return (
@@ -131,6 +132,7 @@ function AppLayout() {
               <Route path="/messages" element={<Messages />} />
               <Route path="/reports" element={<Reports />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/tenants" element={<Tenants />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
           </Suspense>

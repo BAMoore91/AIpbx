@@ -3,9 +3,10 @@ import {
   LayoutDashboard, Monitor, Users, Phone, PhoneForwarded,
   GitBranch, Clock, Network, Brain, BookOpen, PhoneCall,
   Mic, Mail, Voicemail, BarChart3, Settings, ChevronRight,
-  Radio,
+  Radio, Building2,
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { useAuthStore } from '@/store/authStore';
 
 interface NavItem {
   to: string;
@@ -17,6 +18,8 @@ interface NavItem {
 interface NavGroup {
   title?: string;
   items: NavItem[];
+  /** Only show this group to platform superadmins. */
+  superadmin?: boolean;
 }
 
 const NAV: NavGroup[] = [
@@ -65,6 +68,11 @@ const NAV: NavGroup[] = [
       { to: '/settings', icon: Settings, label: 'Settings' },
     ],
   },
+  {
+    title: 'Platform',
+    superadmin: true,
+    items: [{ to: '/tenants', icon: Building2, label: 'Tenants' }],
+  },
 ];
 
 interface SidebarProps {
@@ -74,6 +82,8 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed = false }: SidebarProps) {
   const location = useLocation();
+  const role = useAuthStore((s) => s.user?.role);
+  const groups = NAV.filter((g) => !g.superadmin || role === 'superadmin');
 
   return (
     <aside
@@ -100,7 +110,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-3 px-2 no-scrollbar space-y-1">
-        {NAV.map((group, gi) => (
+        {groups.map((group, gi) => (
           <div key={gi} className={gi > 0 ? 'mt-2' : ''}>
             {group.title && !collapsed && (
               <p className="px-3 py-1 text-2xs font-semibold text-surface-500 uppercase tracking-wider">

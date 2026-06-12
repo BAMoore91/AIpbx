@@ -17,11 +17,29 @@ export const api = axios.create({
   timeout: 30_000,
 });
 
-// ─── Request interceptor: attach Bearer token ─────────────────────────────────
+/**
+ * Active-tenant override for superadmins. Stored as a plain tenant id under
+ * this key; the API honors `X-Tenant-Id` only for superadmins, so sending it
+ * unconditionally is safe (ignored for everyone else).
+ */
+export const ACTIVE_TENANT_KEY = 'aipbx-active-tenant';
+export const tenantContext = {
+  get: () => localStorage.getItem(ACTIVE_TENANT_KEY),
+  set: (id: string | null) => {
+    if (id) localStorage.setItem(ACTIVE_TENANT_KEY, id);
+    else localStorage.removeItem(ACTIVE_TENANT_KEY);
+  },
+};
+
+// ─── Request interceptor: attach Bearer token + active tenant ─────────────────
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const token = tokenStorage.getAccess();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+  const activeTenant = tenantContext.get();
+  if (activeTenant) {
+    config.headers['X-Tenant-Id'] = activeTenant;
   }
   return config;
 });
@@ -121,6 +139,57 @@ export const queuesApi = {
   stats: (id: string) =>
     api.get<QueueStats>(`/queues/${id}/stats`).then((r) => r.data),
 };
+// ─── Tenants (platform / superadmin) ─────────────────────────────────────────
+export interface TenantUsage {
+  extensions: number;
+  users: number;
+  ai_agents: number;
+  did_numbers: number;
+  trunks: number;
+  active_calls: number;
+}
+export interface Tenant {
+  id: string;
+  name: string;
+  slug: string;
+  domain: string | null;
+  plan: 'free' | 'pro' | 'enterprise';
+  max_extensions: number;
+  max_concurrent_calls: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  usage?: TenantUsage;
+}
+export interface TenantCreateInput {
+  name: string;
+  slug: string;
+  domain?: string;
+  plan?: 'free' | 'pro' | 'enterprise';
+  max_extensions?: number;
+  max_concurrent_calls?: number;
+  admin?: { email: string; password: string; first_name?: string; last_name?: string };
+}
+export const tenantsApi = {
+  list: (params?: ListParams) =>
+    api.get<PaginatedResponse<Tenant>>('/tenants', { params }).then((r) => r.data),
+  get: (id: string) => api.get<Tenant>(`/tenants/${id}`).then((r) => r.data),
+  create: (body: TenantCreateInput) =>
+    api.post<Tenant & { adminUserId: string | null }>('/tenants', body).then((r) => r.data),
+  update: (id: string, body: Partial<Tenant>) =>
+    api.patch<Tenant>(`/tenants/${id}`, body).then((r) => r.data),
+  suspend: (id: string) => api.post<Tenant>(`/tenants/${id}/suspend`).then((r) => r.data),
+  activate: (id: string) => api.post<Tenant>(`/tenants/${id}/activate`).then((r) => r.data),
+  remove: (id: string, force = false) =>
+    api.delete(`/tenants/${id}${force ? '?force=1' : ''}`).then((r) => r.data),
+  current: () =>
+    api
+      .get<{ tenant: Tenant; usage: TenantUsage; impersonating: boolean; homeTenantId: string }>(
+        '/tenants/context/current',
+      )
+      .then((r) => r.data),
+};
+
 // ─── Carrier integrations (Twilio Elastic SIP Trunking) ──────────────────────
 export interface TwilioCredsInput {
   accountSid: string;

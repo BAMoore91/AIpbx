@@ -7,6 +7,7 @@ import { authApi } from '@/lib/api';
 import { wsClient } from '@/lib/ws';
 import { useSoftphoneStore } from '@/store/softphoneStore';
 import { Badge } from './Badge';
+import { TenantSwitcher } from './TenantSwitcher';
 import { clsx } from 'clsx';
 
 interface TopbarProps {
@@ -47,6 +48,9 @@ export function Topbar({ onSidebarToggle, darkMode, onDarkModeToggle }: TopbarPr
       <button onClick={onSidebarToggle} className="btn-ghost btn-icon text-surface-500">
         <Menu size={18} />
       </button>
+
+      {/* Tenant switcher (superadmin only) */}
+      <TenantSwitcher />
 
       <div className="flex-1" />
 

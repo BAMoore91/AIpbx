@@ -20,22 +20,41 @@ async function authPluginImpl(app: FastifyInstance): Promise<void> {
     request: FastifyRequest,
     _reply: FastifyReply,
   ) => {
-    const header = request.headers.authorization;
-    if (!header?.startsWith('Bearer ')) {
+    const authzHeader = request.headers.authorization;
+    if (!authzHeader?.startsWith('Bearer ')) {
       throw unauthorized('Missing bearer token');
     }
-    const token = header.slice('Bearer '.length).trim();
+    const token = authzHeader.slice('Bearer '.length).trim();
+    let claims;
     try {
-      const claims = app.ctx.jwt.verifyAccess(token);
-      request.auth = {
-        userId: claims.sub,
-        tenantId: claims.tid,
-        role: claims.role,
-        email: claims.email,
-      };
+      claims = app.ctx.jwt.verifyAccess(token);
     } catch {
       throw unauthorized('Invalid or expired token');
     }
+
+    // Superadmins may operate on any tenant by setting X-Tenant-Id; everyone
+    // else is locked to their own tenant. This is the single point where the
+    // effective tenant (used by every downstream query) is decided.
+    const homeTenantId = claims.tid;
+    let tenantId = homeTenantId;
+    let impersonating = false;
+    if (claims.role === 'superadmin') {
+      const raw = request.headers['x-tenant-id'];
+      const target = Array.isArray(raw) ? raw[0] : raw;
+      if (target && /^[0-9a-f-]{36}$/i.test(target) && target !== homeTenantId) {
+        tenantId = target;
+        impersonating = true;
+      }
+    }
+
+    request.auth = {
+      userId: claims.sub,
+      tenantId,
+      homeTenantId,
+      impersonating,
+      role: claims.role,
+      email: claims.email,
+    };
   };
 
   const requireRole =
@@ -48,8 +67,13 @@ async function authPluginImpl(app: FastifyInstance): Promise<void> {
       if (!roles.includes(role)) throw forbidden('Insufficient role');
     };
 
+  const requireSuperadmin: preHandlerHookHandler = async (request: FastifyRequest) => {
+    if (request.auth?.role !== 'superadmin') throw forbidden('Superadmin only');
+  };
+
   app.decorate('authenticate', authenticate);
   app.decorate('requireRole', requireRole);
+  app.decorate('requireSuperadmin', requireSuperadmin);
 }
 
 export const authPlugin = fp(authPluginImpl, { name: 'auth-plugin' });

@@ -38,6 +38,32 @@ export async function resolveDidTenant(
   );
 }
 
+/**
+ * Extract the PJSIP endpoint name (== sip_username) from an Asterisk channel
+ * name like `PJSIP/alice_a1b2-00000007`. Returns null for non-PJSIP channels.
+ * sip_username is globally unique, so it is the correct multi-tenant key.
+ */
+export function sipUserFromChannelName(name: string | undefined | null): string | null {
+  if (!name) return null;
+  const m = /^PJSIP\/(.+)-[0-9a-f]+$/i.exec(name);
+  return m?.[1] ?? null;
+}
+
+/**
+ * Resolve the tenant from a calling SIP endpoint. `sip_username` is globally
+ * unique, so this is the authoritative tenant signal for internal calls —
+ * unlike the dialable extension number, which collides across tenants. Returns
+ * the owning extension (carrying tenant_id) or null.
+ */
+export async function resolveExtensionBySipUser(
+  sipUsername: string,
+): Promise<ExtensionRow | null> {
+  return queryOne<ExtensionRow>(
+    `SELECT * FROM extensions WHERE sip_username = $1`,
+    [sipUsername],
+  );
+}
+
 /** Resolve an arbitrary (dest_type, dest_id) into a concrete RouteTarget. */
 export async function resolveDestination(
   tenantId: string,

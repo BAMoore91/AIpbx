@@ -11,6 +11,8 @@ import {
   resolveDidTenant,
   resolveDestination,
   resolveInternalNumber,
+  resolveExtensionBySipUser,
+  sipUserFromChannelName,
   type RouteTarget,
 } from './routing.js';
 import type {
@@ -103,10 +105,11 @@ export class AriController {
       tenantId = did.tenant_id;
       target = await resolveDestination(tenantId, did.dest_type, did.dest_id);
     } else {
-      // Internal call: derive tenant from the originating endpoint var if set.
+      // Internal call: derive tenant from the calling SIP endpoint (globally
+      // unique), falling back to an explicit channel var set during originate.
       tenantId =
+        (await this.tenantFromChannel(channel)) ??
         (await this.channelVar(channel, 'AIPBX_TENANT')) ??
-        (await this.tenantFromCaller(callerNumber)) ??
         '';
       direction = 'internal';
       target = tenantId
@@ -115,7 +118,21 @@ export class AriController {
     }
 
     if (!tenantId) {
-      logger.warn({ dialed }, 'unable to determine tenant for call; hanging up');
+      logger.warn({ dialed, channel: channel.name }, 'unable to determine tenant for call; hanging up');
+      await channel.hangup().catch(() => undefined);
+      return;
+    }
+
+    // Tenant gating: reject calls for suspended tenants or over the plan's
+    // concurrent-call ceiling.
+    if (!(await this.tenantActive(tenantId))) {
+      logger.warn({ tenantId }, 'call for inactive tenant; rejecting');
+      await channel.hangup().catch(() => undefined);
+      return;
+    }
+    if (!(await this.withinConcurrencyLimit(tenantId))) {
+      logger.warn({ tenantId }, 'tenant concurrent-call limit reached; rejecting');
+      await this.safePlayBusy(channel);
       await channel.hangup().catch(() => undefined);
       return;
     }
@@ -666,13 +683,53 @@ export class AriController {
     }
   }
 
-  private async tenantFromCaller(callerNumber: string | null): Promise<string | null> {
-    if (!callerNumber) return null;
-    const ext = await queryOne<{ tenant_id: string }>(
-      `SELECT tenant_id FROM extensions WHERE extension = $1 LIMIT 1`,
-      [callerNumber],
-    );
+  /**
+   * Derive the tenant from the CALLING channel. The PJSIP channel name is
+   * `PJSIP/<sip_username>-<seq>`; sip_username is globally unique, so this is
+   * the correct multi-tenant signal. We deliberately do NOT fall back to the
+   * caller's extension number — that collides across tenants.
+   */
+  private async tenantFromChannel(channel: AriChannel): Promise<string | null> {
+    const sipUser = sipUserFromChannelName(channel.name);
+    if (!sipUser) return null;
+    const ext = await resolveExtensionBySipUser(sipUser);
     return ext?.tenant_id ?? null;
+  }
+
+  /**
+   * Enforce the tenant's concurrent-call ceiling (plan limit). Counts calls in
+   * flight for the tenant; returns true if a new call is allowed.
+   */
+  private async withinConcurrencyLimit(tenantId: string): Promise<boolean> {
+    const row = await queryOne<{ active: string; max_concurrent_calls: number }>(
+      `SELECT
+         (SELECT count(*) FROM calls
+            WHERE tenant_id = $1 AND status NOT IN ('ended')) AS active,
+         t.max_concurrent_calls
+       FROM tenants t WHERE t.id = $1`,
+      [tenantId],
+    );
+    if (!row) return false;
+    return Number(row.active) < row.max_concurrent_calls;
+  }
+
+  /** Whether the tenant exists and is active (not suspended). */
+  private async tenantActive(tenantId: string): Promise<boolean> {
+    const row = await queryOne<{ is_active: boolean }>(
+      `SELECT is_active FROM tenants WHERE id = $1`,
+      [tenantId],
+    );
+    return row?.is_active === true;
+  }
+
+  /** Best-effort "all circuits busy" tone before rejecting a call. */
+  private async safePlayBusy(channel: AriChannel): Promise<void> {
+    try {
+      await channel.answer?.();
+      await channel.play?.({ media: 'sound:congestion' });
+    } catch {
+      /* ignore — we're hanging up anyway */
+    }
   }
 
   private async setVar(channel: AriChannel, variable: string, value: string): Promise<void> {
