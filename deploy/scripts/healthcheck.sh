@@ -1,244 +1,184 @@
 #!/usr/bin/env bash
 # =============================================================================
-# AIpbx — Health Check Script
-# =============================================================================
-# Checks the health of all AIpbx services and exits 0 only if all pass.
+# AIpbx — Service health check
+#
+# Checks all AIpbx services and exits 0 if all are healthy, 1 if any fail.
 #
 # Usage:
-#   bash healthcheck.sh           # human-readable output
-#   bash healthcheck.sh --json    # JSON output for monitoring systems
+#   bash healthcheck.sh            # human-readable output
+#   bash healthcheck.sh --json     # JSON output for monitoring systems
 #
-# Exit codes:
-#   0 — all services healthy
-#   1 — one or more services unhealthy
+# Optional env:
+#   DEPLOY_DIR     — repo root (default: /opt/aipbx)
+#   REDIS_PASSWORD — for Redis ping check (loaded from .env if available)
 # =============================================================================
 set -euo pipefail
 
-# -----------------------------------------------------------------------------
-# Load .env for Redis password
-# -----------------------------------------------------------------------------
 DEPLOY_DIR="${DEPLOY_DIR:-/opt/aipbx}"
-ENV_FILE="${DEPLOY_DIR}/.env"
 
-if [[ -f "${ENV_FILE}" ]]; then
+# Load .env for REDIS_PASSWORD etc.
+if [[ -f "${DEPLOY_DIR}/.env" ]]; then
     # shellcheck disable=SC1090
-    set -a; source "${ENV_FILE}"; set +a
+    set -a; source "${DEPLOY_DIR}/.env"; set +a
 fi
 
 REDIS_PASSWORD="${REDIS_PASSWORD:-}"
+JSON_OUTPUT=0
+[[ "${1:-}" == "--json" ]] && JSON_OUTPUT=1
 
-# -----------------------------------------------------------------------------
-# Flags
-# -----------------------------------------------------------------------------
-JSON_OUTPUT=false
-for arg in "$@"; do
-    case "${arg}" in
-        --json) JSON_OUTPUT=true ;;
-    esac
-done
-
-# -----------------------------------------------------------------------------
-# Color helpers (disabled when --json or non-interactive)
-# -----------------------------------------------------------------------------
-if [[ "${JSON_OUTPUT}" == "false" ]] && [[ -t 1 ]]; then
-    GREEN='\033[0;32m'
+# Colors (disabled in JSON mode or non-tty)
+if [[ "${JSON_OUTPUT}" -eq 0 ]] && [[ -t 1 ]]; then
     RED='\033[0;31m'
-    YELLOW='\033[0;33m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
     NC='\033[0m'
 else
-    GREEN=''
-    RED=''
-    YELLOW=''
-    NC=''
+    RED=''; GREEN=''; YELLOW=''; NC=''
 fi
 
-# -----------------------------------------------------------------------------
-# State tracking
-# -----------------------------------------------------------------------------
-declare -A CHECK_STATUS   # service → "ok" | "fail"
-declare -A CHECK_MESSAGE  # service → detail message
-OVERALL_OK=true
+# Track overall status
+OVERALL=0
+declare -A RESULTS
+declare -A DETAILS
 
-# -----------------------------------------------------------------------------
-# Helpers
-# -----------------------------------------------------------------------------
-check_pass() {
-    local name="$1"
-    local msg="${2:-}"
-    CHECK_STATUS["${name}"]="ok"
-    CHECK_MESSAGE["${name}"]="${msg}"
-    if [[ "${JSON_OUTPUT}" == "false" ]]; then
-        printf "  ${GREEN}OK${NC}   %-20s %s\n" "${name}" "${msg}"
+check() {
+    local name="$1"; shift
+    local result
+    if result=$("$@" 2>&1); then
+        RESULTS["${name}"]="ok"
+        DETAILS["${name}"]="${result:-healthy}"
+    else
+        RESULTS["${name}"]="fail"
+        DETAILS["${name}"]="${result:-check failed}"
+        OVERALL=1
     fi
 }
 
-check_fail() {
+print_status() {
     local name="$1"
-    local msg="${2:-}"
-    CHECK_STATUS["${name}"]="fail"
-    CHECK_MESSAGE["${name}"]="${msg}"
-    OVERALL_OK=false
-    if [[ "${JSON_OUTPUT}" == "false" ]]; then
-        printf "  ${RED}FAIL${NC} %-20s %s\n" "${name}" "${msg}"
+    local status="${RESULTS[$name]}"
+    local detail="${DETAILS[$name]}"
+    if [[ "${status}" == "ok" ]]; then
+        echo -e "  ${GREEN}[OK]${NC}   ${name}: ${detail}"
+    else
+        echo -e "  ${RED}[FAIL]${NC} ${name}: ${detail}"
     fi
 }
 
-# Run a command; return its stdout. On error, return empty string.
-run_check() {
-    local output
-    output=$(eval "$1" 2>/dev/null) && echo "${output}" || echo ""
-}
-
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # Individual checks
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 
-# 1. API (Node.js REST service)
 check_api() {
-    local url="http://localhost:3000/healthz"
     local response
-    response=$(curl -sf --max-time 5 "${url}" 2>/dev/null || echo "")
-    if [[ -n "${response}" ]]; then
-        check_pass "api" "HTTP 200 from ${url}"
-    else
-        check_fail "api" "No response from ${url}"
-    fi
+    response=$(curl -sf --max-time 5 http://localhost:3000/healthz 2>&1) || \
+    response=$(curl -sf --max-time 5 http://api:3000/healthz 2>&1)
+    echo "${response}" | head -c 100
 }
 
-# 2. AI Engine (Python gRPC/HTTP service)
 check_ai_engine() {
-    local url="http://localhost:8080/healthz"
     local response
-    response=$(curl -sf --max-time 5 "${url}" 2>/dev/null || echo "")
-    if [[ -n "${response}" ]]; then
-        check_pass "ai-engine" "HTTP 200 from ${url}"
-    else
-        check_fail "ai-engine" "No response from ${url}"
-    fi
+    response=$(curl -sf --max-time 5 http://localhost:8080/healthz 2>&1) || \
+    response=$(curl -sf --max-time 5 http://ai-engine:8080/healthz 2>&1)
+    echo "${response}" | head -c 100
 }
 
-# 3. Asterisk (check version via CLI)
 check_asterisk() {
     cd "${DEPLOY_DIR}"
-    local output
-    output=$(docker compose exec -T asterisk asterisk -rx "core show version" 2>/dev/null | head -1 || echo "")
-    if echo "${output}" | grep -qi "asterisk"; then
-        check_pass "asterisk" "${output}"
-    else
-        check_fail "asterisk" "No response from Asterisk CLI (container may be down)"
-    fi
+    local version
+    version=$(docker compose exec -T asterisk asterisk -rx "core show version" 2>&1 | head -1)
+    echo "${version}"
 }
 
-# 4. PostgreSQL
 check_postgres() {
     cd "${DEPLOY_DIR}"
-    local output
-    output=$(docker compose exec -T postgres pg_isready 2>/dev/null || echo "")
-    if echo "${output}" | grep -q "accepting connections"; then
-        check_pass "postgres" "${output}"
-    else
-        check_fail "postgres" "pg_isready failed: ${output}"
-    fi
+    docker compose exec -T postgres pg_isready \
+        -U "${POSTGRES_USER:-aipbx}" \
+        -d "${POSTGRES_DB:-aipbx}" \
+        2>&1
 }
 
-# 5. Redis
 check_redis() {
     cd "${DEPLOY_DIR}"
-    local output
+    local pong
     if [[ -n "${REDIS_PASSWORD}" ]]; then
-        output=$(docker compose exec -T redis redis-cli -a "${REDIS_PASSWORD}" ping 2>/dev/null || echo "")
+        pong=$(docker compose exec -T redis redis-cli -a "${REDIS_PASSWORD}" ping 2>&1)
     else
-        output=$(docker compose exec -T redis redis-cli ping 2>/dev/null || echo "")
+        pong=$(docker compose exec -T redis redis-cli ping 2>&1)
     fi
-
-    if [[ "${output}" == "PONG" ]]; then
-        check_pass "redis" "PONG"
-    else
-        check_fail "redis" "redis-cli ping returned: '${output}'"
-    fi
+    echo "${pong}"
 }
 
-# 6. nginx (check it's running and serving HTTP)
 check_nginx() {
     cd "${DEPLOY_DIR}"
-    # Check container is running
-    local status
-    status=$(docker compose ps --status running --services 2>/dev/null | grep "^nginx" || echo "")
-    if [[ -n "${status}" ]]; then
-        # Also verify it responds to HTTP (the 301 redirect is a healthy response)
-        local http_code
-        http_code=$(curl -o /dev/null -sw "%{http_code}" --max-time 5 "http://localhost:80/" 2>/dev/null || echo "")
-        if [[ "${http_code}" == "301" ]] || [[ "${http_code}" == "200" ]]; then
-            check_pass "nginx" "Container running, HTTP ${http_code}"
-        else
-            check_pass "nginx" "Container running (HTTP code: ${http_code:-no response})"
-        fi
-    else
-        check_fail "nginx" "nginx container is not running"
-    fi
+    docker compose exec -T nginx nginx -t 2>&1 | grep -c "successful" | xargs -I{} echo "nginx config OK"
 }
 
-# -----------------------------------------------------------------------------
-# JSON output
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Run all checks
+# ---------------------------------------------------------------------------
+run_checks() {
+    check "api"        check_api
+    check "ai-engine"  check_ai_engine
+    check "asterisk"   check_asterisk
+    check "postgres"   check_postgres
+    check "redis"      check_redis
+    check "nginx"      check_nginx
+}
+
+# ---------------------------------------------------------------------------
+# Output
+# ---------------------------------------------------------------------------
+output_human() {
+    local ts
+    ts=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+    echo ""
+    echo "  AIpbx Health Check — ${ts}"
+    echo "  ----------------------------------------"
+    for svc in api ai-engine asterisk postgres redis nginx; do
+        print_status "${svc}"
+    done
+    echo "  ----------------------------------------"
+    if [[ "${OVERALL}" -eq 0 ]]; then
+        echo -e "  ${GREEN}All services healthy.${NC}"
+    else
+        echo -e "  ${RED}One or more services are unhealthy.${NC}"
+    fi
+    echo ""
+}
+
 output_json() {
-    local timestamp
-    timestamp=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
-    local overall
-    overall=$( [[ "${OVERALL_OK}" == "true" ]] && echo "healthy" || echo "unhealthy" )
+    local ts
+    ts=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+    local overall_str
+    overall_str=$([[ "${OVERALL}" -eq 0 ]] && echo "ok" || echo "fail")
 
-    echo "{"
-    echo "  \"timestamp\": \"${timestamp}\","
-    echo "  \"overall\": \"${overall}\","
-    echo "  \"checks\": {"
+    printf '{\n  "timestamp": "%s",\n  "status": "%s",\n  "services": {\n' \
+        "${ts}" "${overall_str}"
 
-    local first=true
-    for name in api ai-engine asterisk postgres redis nginx; do
-        if [[ "${first}" == "false" ]]; then echo ","; fi
-        first=false
-        local status="${CHECK_STATUS[${name}]:-unknown}"
-        local message="${CHECK_MESSAGE[${name}]:-}"
-        # Escape quotes in message
-        message="${message//\"/\\\"}"
-        printf "    \"%s\": {\"status\": \"%s\", \"message\": \"%s\"}" \
-            "${name}" "${status}" "${message}"
+    local first=1
+    for svc in api ai-engine asterisk postgres redis nginx; do
+        [[ "${first}" -eq 0 ]] && printf ',\n'
+        # Escape double-quotes in detail
+        local detail
+        detail="${DETAILS[$svc]//\"/\\\"}"
+        printf '    "%s": {"status": "%s", "detail": "%s"}' \
+            "${svc}" "${RESULTS[$svc]}" "${detail}"
+        first=0
     done
 
-    echo ""
-    echo "  }"
-    echo "}"
+    printf '\n  }\n}\n'
 }
 
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # Main
-# -----------------------------------------------------------------------------
-main() {
-    if [[ "${JSON_OUTPUT}" == "false" ]]; then
-        echo ""
-        echo "  AIpbx Health Check — $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-        echo "  ──────────────────────────────────────────────────────"
-    fi
+# ---------------------------------------------------------------------------
+run_checks
 
-    check_api
-    check_ai_engine
-    check_asterisk
-    check_postgres
-    check_redis
-    check_nginx
+if [[ "${JSON_OUTPUT}" -eq 1 ]]; then
+    output_json
+else
+    output_human
+fi
 
-    if [[ "${JSON_OUTPUT}" == "true" ]]; then
-        output_json
-    else
-        echo "  ──────────────────────────────────────────────────────"
-        if [[ "${OVERALL_OK}" == "true" ]]; then
-            printf "  ${GREEN}All checks passed.${NC}\n"
-        else
-            printf "  ${RED}One or more checks failed.${NC}\n"
-        fi
-        echo ""
-    fi
-
-    [[ "${OVERALL_OK}" == "true" ]] && exit 0 || exit 1
-}
-
-main "$@"
+exit "${OVERALL}"

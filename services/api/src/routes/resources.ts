@@ -65,8 +65,8 @@ export function registerResourceRoutes(
   registerCrud(app, { resource: 'ring_groups', table: 'ring_groups', createSchema: S.ringGroupCreate, updateSchema: S.ringGroupUpdate });
   registerCrud(app, { resource: 'queues', table: 'queues', createSchema: S.queueCreate, updateSchema: S.queueUpdate });
   registerCrud(app, { resource: 'ivr_menus', table: 'ivr_menus', createSchema: S.ivrCreate, updateSchema: S.ivrUpdate });
-  registerCrud(app, { resource: 'time_conditions', table: 'time_conditions', createSchema: S.timeConditionCreate, updateSchema: S.timeConditionUpdate });
-  registerCrud(app, { resource: 'ai_agents', table: 'ai_agents', createSchema: S.aiAgentCreate, updateSchema: S.aiAgentUpdate });
+  registerCrud(app, { resource: 'time_conditions', table: 'time_conditions', createSchema: S.timeConditionCreate, updateSchema: S.timeConditionUpdate, jsonbColumns: ['rules', 'holidays'] });
+  registerCrud(app, { resource: 'ai_agents', table: 'ai_agents', createSchema: S.aiAgentCreate, updateSchema: S.aiAgentUpdate, jsonbColumns: ['tools', 'settings'] });
   registerCrud(app, { resource: 'knowledge_bases', table: 'knowledge_bases', createSchema: S.knowledgeBaseCreate, updateSchema: S.knowledgeBaseUpdate });
   registerCrud(app, { resource: 'webhooks', table: 'webhooks', createSchema: S.webhookCreate, updateSchema: S.webhookUpdate, redact: redactSecret('secret') });
 }

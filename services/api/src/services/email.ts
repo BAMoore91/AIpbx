@@ -18,7 +18,7 @@ export class EmailService {
   private readonly transporter: Transporter | null;
   private readonly from: string;
 
-  constructor(private readonly cfg: AppConfig['smtp']) {
+  constructor(cfg: AppConfig['smtp']) {
     this.from = cfg.from;
     if (cfg.host) {
       this.transporter = nodemailer.createTransport({

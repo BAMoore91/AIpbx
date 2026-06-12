@@ -74,10 +74,10 @@ export class WsHub {
   /** Subscribe to Redis once; fans events to connected clients of that tenant. */
   startRedisBridge(): void {
     const sub = getSubscriber();
-    sub.psubscribe(TENANT_CHANNEL_PATTERN).catch((err) => {
+    sub.psubscribe(TENANT_CHANNEL_PATTERN).catch((err: unknown) => {
       logger.error({ err }, 'failed to psubscribe to tenant events');
     });
-    sub.on('pmessage', (_pattern, _channel, message) => {
+    sub.on('pmessage', (_pattern: string, _channel: string, message: string) => {
       let event: RealtimeEvent;
       try {
         event = JSON.parse(message);

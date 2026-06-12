@@ -17,7 +17,7 @@ export class S3Service {
   private readonly client: S3Client | null;
   private readonly bucket: string;
 
-  constructor(private readonly cfg: AppConfig['s3']) {
+  constructor(cfg: AppConfig['s3']) {
     this.bucket = cfg.bucket;
     if (cfg.accessKey && cfg.secretKey) {
       this.client = new S3Client({

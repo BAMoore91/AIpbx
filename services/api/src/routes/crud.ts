@@ -39,6 +39,13 @@ export interface CrudOptions<TCreate, TUpdate> {
   afterWrite?: (op: 'create' | 'update' | 'delete', row: QueryResultRow, tenantId: string) => Promise<void>;
   /** Strip sensitive columns from responses (e.g. secrets). */
   redact?: (row: QueryResultRow) => QueryResultRow;
+  /**
+   * Columns that are jsonb and may receive JS arrays. Arrays into a jsonb
+   * column must be JSON-stringified (a bare JS array would be sent as a
+   * Postgres text[] literal). Plain objects are always stringified; this set
+   * disambiguates arrays whose target is jsonb vs a real text[] column.
+   */
+  jsonbColumns?: string[];
 }
 
 export function registerCrud<TCreate, TUpdate>(
@@ -52,6 +59,8 @@ export function registerCrud<TCreate, TUpdate>(
     writeRoles = ['admin', 'supervisor'],
     redact = (r) => r,
   } = opts;
+  const jsonbCols = new Set(opts.jsonbColumns ?? []);
+  const norm = (col: string, value: unknown): unknown => normalize(value, jsonbCols.has(col));
 
   const base = `/${resource}`;
   const writeGuard = { preHandler: [app.authenticate, app.requireRole(...writeRoles)] };
@@ -91,12 +100,12 @@ export function registerCrud<TCreate, TUpdate>(
     const auth = requireAuth(request);
     const data = parse(opts.createSchema, request.body);
     const prepared = (await opts.beforeCreate?.(data, auth.tenantId)) ?? (data as Record<string, unknown>);
-    const payload = { ...prepared, tenant_id: auth.tenantId };
+    const payload: Record<string, unknown> = { ...prepared, tenant_id: auth.tenantId };
     const cols = Object.keys(payload);
     const placeholders = cols.map((_, i) => `$${i + 1}`).join(', ');
     const row = await queryOne(
       `INSERT INTO ${table} (${cols.join(', ')}) VALUES (${placeholders}) RETURNING *`,
-      cols.map((c) => normalize(payload[c])),
+      cols.map((c) => norm(c, payload[c])),
     );
     await opts.afterWrite?.('create', row!, auth.tenantId);
     await audit(auth, { action: `${resource}.create`, entity: resource, entityId: String(row!.id), ip: clientIp(request) });
@@ -110,7 +119,7 @@ export function registerCrud<TCreate, TUpdate>(
     const data = parse(opts.updateSchema, request.body);
     const prepared = (await opts.beforeUpdate?.(data, auth.tenantId)) ?? (data as Record<string, unknown>);
     const entries = Object.fromEntries(
-      Object.entries(prepared).filter(([, v]) => v !== undefined).map(([k, v]) => [k, normalize(v)]),
+      Object.entries(prepared).filter(([, v]) => v !== undefined).map(([k, v]) => [k, norm(k, v)]),
     );
     if (Object.keys(entries).length === 0) {
       const existing = await queryOne(`SELECT * FROM ${table} WHERE tenant_id = $1 AND id = $2`, [auth.tenantId, id]);
@@ -143,11 +152,14 @@ export function registerCrud<TCreate, TUpdate>(
   });
 }
 
-/** Serialize JS objects/arrays for jsonb/text[] columns when needed. */
-function normalize(value: unknown): unknown {
+/**
+ * Serialize values for pg. Plain objects → jsonb string. Arrays stay native
+ * (text[]) unless the target column is jsonb, in which case they're stringified.
+ */
+function normalize(value: unknown, isJsonb = false): unknown {
   if (value === undefined) return null;
-  // Arrays map to Postgres array params natively via pg; objects → jsonb string.
-  if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+  if (value !== null && typeof value === 'object') {
+    if (Array.isArray(value)) return isJsonb ? JSON.stringify(value) : value;
     return JSON.stringify(value);
   }
   return value;

@@ -1,4 +1,4 @@
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import { ZodError } from 'zod';
 import { logger } from './logger.js';
@@ -16,8 +16,10 @@ export async function buildApp(
   ctx: AppContext,
   ari: AriController,
 ): Promise<FastifyInstance> {
-  const app = Fastify({
-    loggerInstance: logger,
+  const app: FastifyInstance = Fastify({
+    // The pino instance satisfies FastifyBaseLogger; cast keeps the instance
+    // type at the default generics so route registration types line up.
+    logger: logger as unknown as FastifyBaseLogger,
     trustProxy: true,
     bodyLimit: 5 * 1024 * 1024,
   });
