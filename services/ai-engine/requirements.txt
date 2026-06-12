@@ -1,0 +1,18 @@
+# Runtime dependencies for the AIpbx AI voice engine.
+# `audioop` is part of the Python 3.11 stdlib (used for resampling / companding).
+anthropic>=0.40
+fastapi>=0.110
+uvicorn[standard]>=0.29
+asyncpg>=0.29
+redis>=5.0
+httpx>=0.27
+aioboto3>=12.3
+numpy>=1.26
+pydantic>=2.6
+pydantic-settings>=2.2
+websockets>=12.0
+python-dotenv>=1.0
+
+# dev / test
+pytest>=8.0
+pytest-asyncio>=0.23

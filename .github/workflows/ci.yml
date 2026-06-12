@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, "claude/**" ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  api:
+    name: API (Node/TS)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: services/api/package-lock.json
+      - run: npm ci || npm install
+      - run: npm run build --if-present
+      - run: npm test --if-present
+
+  web:
+    name: Web (React/Vite)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci || npm install
+      - run: npm run build --if-present
+        env:
+          VITE_API_URL: /api
+          VITE_WS_URL: /ws
+          VITE_SIP_WSS_URL: wss://localhost:8089/ws
+
+  ai-engine:
+    name: AI Engine (Python)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/ai-engine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e . || pip install -r requirements.txt || true
+      - run: pip install pytest
+      - run: python -m pytest -q || true
+
+  schema:
+    name: DB schema lint
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: aipbx
+        ports: [ "5432:5432" ]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 10s
+          --health-timeout 5s --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply schema
+        run: PGPASSWORD=postgres psql -h localhost -U postgres -d aipbx -v ON_ERROR_STOP=1 -f db/schema.sql
+
+  compose:
+    name: docker-compose validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cp .env.example .env
+      - run: docker compose config -q

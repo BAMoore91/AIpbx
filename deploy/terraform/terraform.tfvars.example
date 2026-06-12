@@ -1,0 +1,58 @@
+# ============================================================================
+# AIpbx — Terraform variable values example
+# Copy to terraform.tfvars and fill in real values.
+# NEVER commit terraform.tfvars — it is git-ignored.
+# ============================================================================
+
+# DigitalOcean API credentials
+do_token           = "dop_v1_REPLACE_ME"
+spaces_access_key  = "REPLACE_ME_SPACES_ACCESS_KEY"
+spaces_secret_key  = "REPLACE_ME_SPACES_SECRET_KEY"
+
+# Infrastructure
+region       = "nyc3"
+droplet_size = "s-4vcpu-8gb"
+
+# DNS — results in FQDN: pbx.example.com
+domain    = "example.com"
+subdomain = "pbx"
+
+# SSH — find with: doctl compute ssh-key list
+ssh_key_fingerprint = "aa:bb:cc:dd:..."
+
+# Restrict SSH to your office/VPN CIDR (recommended)
+allowed_ssh_ips = ["203.0.113.10/32"]
+
+# DigitalOcean Project
+project_name = "AIpbx"
+
+# Repository
+repo_url    = "https://github.com/YOUR_ORG/AIpbx.git"
+repo_branch = "main"
+
+# Recordings bucket
+spaces_bucket_name = "aipbx-recordings"
+spaces_region      = "nyc3"
+
+# --------------------------------------------------------------------------
+# Application secrets — generate with:
+#   openssl rand -hex 32    (for passwords)
+#   openssl rand -base64 32 (for encryption_key)
+# --------------------------------------------------------------------------
+postgres_password  = "REPLACE_ME_strong_password"
+redis_password     = "REPLACE_ME_redis_password"
+jwt_secret         = "REPLACE_ME_64_char_random_string_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+jwt_refresh_secret = "REPLACE_ME_64_char_random_string_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+encryption_key     = "REPLACE_ME_32_byte_base64_key=="
+ari_password       = "REPLACE_ME_ari_password"
+
+# Third-party API keys
+anthropic_api_key  = "sk-ant-REPLACE_ME"
+deepgram_api_key   = "REPLACE_ME"
+elevenlabs_api_key = "REPLACE_ME"
+
+# Email (optional — leave blank to disable voicemail-to-email)
+smtp_host     = "smtp.sendgrid.net"
+smtp_user     = "apikey"
+smtp_password = "REPLACE_ME"
+smtp_from     = "pbx@example.com"
