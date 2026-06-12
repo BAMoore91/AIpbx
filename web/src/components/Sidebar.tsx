@@ -3,16 +3,19 @@ import {
   LayoutDashboard, Monitor, Users, Phone, PhoneForwarded,
   GitBranch, Clock, Network, Brain, BookOpen, PhoneCall,
   Mic, Mail, Voicemail, BarChart3, Settings, ChevronRight,
-  Radio, Building2,
+  Radio, Building2, Building, ShieldCheck,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useAuthStore } from '@/store/authStore';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface NavItem {
   to: string;
   icon: React.ElementType;
   label: string;
   badge?: number;
+  /** Permission key required to show this item. */
+  permission?: string;
 }
 
 interface NavGroup {
@@ -69,6 +72,13 @@ const NAV: NavGroup[] = [
     ],
   },
   {
+    title: 'Access',
+    items: [
+      { to: '/departments', icon: Building, label: 'Departments', permission: 'departments.manage' },
+      { to: '/roles', icon: ShieldCheck, label: 'Roles', permission: 'roles.manage' },
+    ],
+  },
+  {
     title: 'Platform',
     superadmin: true,
     items: [{ to: '/tenants', icon: Building2, label: 'Tenants' }],
@@ -83,7 +93,15 @@ interface SidebarProps {
 export function Sidebar({ collapsed = false }: SidebarProps) {
   const location = useLocation();
   const role = useAuthStore((s) => s.user?.role);
-  const groups = NAV.filter((g) => !g.superadmin || role === 'superadmin');
+  const { can } = usePermissions();
+
+  const groups = NAV
+    .filter((g) => !g.superadmin || role === 'superadmin')
+    .map((g) => ({
+      ...g,
+      items: g.items.filter((item) => !item.permission || can(item.permission)),
+    }))
+    .filter((g) => g.items.length > 0);
 
   return (
     <aside

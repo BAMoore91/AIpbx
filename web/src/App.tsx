@@ -32,6 +32,8 @@ const Messages       = lazy(() => import('./pages/Messages'));
 const Reports        = lazy(() => import('./pages/Reports'));
 const Settings       = lazy(() => import('./pages/Settings'));
 const Tenants        = lazy(() => import('./pages/Tenants'));
+const Departments    = lazy(() => import('./pages/Departments'));
+const Roles          = lazy(() => import('./pages/Roles'));
 
 function PageLoader() {
   return (
@@ -133,6 +135,8 @@ function AppLayout() {
               <Route path="/reports" element={<Reports />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/tenants" element={<Tenants />} />
+              <Route path="/departments" element={<Departments />} />
+              <Route path="/roles" element={<Roles />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
           </Suspense>

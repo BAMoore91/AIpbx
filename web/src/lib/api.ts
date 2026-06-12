@@ -282,3 +282,79 @@ export const reportsApi = {
   generate: (type: string, params: Record<string, unknown>) =>
     api.post<Report>('/reports', { type, ...params }).then((r) => r.data),
 };
+
+// ─── Departments ──────────────────────────────────────────────────────────────
+export interface Department {
+  id: string;
+  tenant_id: string;
+  name: string;
+  description?: string;
+  manager_user_id?: string;
+  member_count: number;
+  extension_count: number;
+  created_at: string;
+}
+
+export interface DepartmentMember {
+  id: string;
+  user_id: string;
+  role: 'owner' | 'manager' | 'receptionist' | 'user';
+  email: string;
+  first_name: string;
+  last_name: string;
+}
+
+export interface DepartmentDetail extends Department {
+  members: DepartmentMember[];
+}
+
+export const departmentsApi = {
+  list: (params?: ListParams) =>
+    api.get<PaginatedResponse<Department>>('/departments', { params }).then((r) => r.data),
+  get: (id: string) =>
+    api.get<DepartmentDetail>(`/departments/${id}`).then((r) => r.data),
+  create: (body: { name: string; description?: string; manager_user_id?: string }) =>
+    api.post<Department>('/departments', body).then((r) => r.data),
+  update: (id: string, body: { name?: string; description?: string; manager_user_id?: string | null }) =>
+    api.patch<Department>(`/departments/${id}`, body).then((r) => r.data),
+  remove: (id: string) =>
+    api.delete(`/departments/${id}`).then((r) => r.data),
+  setMember: (id: string, body: { user_id: string; role: DepartmentMember['role'] }) =>
+    api.put<DepartmentMember>(`/departments/${id}/members`, body).then((r) => r.data),
+  removeMember: (id: string, userId: string) =>
+    api.delete(`/departments/${id}/members/${userId}`).then((r) => r.data),
+};
+
+// ─── Access / RBAC ────────────────────────────────────────────────────────────
+export interface AccessMe {
+  superadmin: boolean;
+  systemRole: string;
+  global: string[];
+  byDepartment: Record<string, string[]>;
+}
+
+export interface RoleMatrixEntry {
+  permissions: string[];
+  editable: boolean;
+}
+
+export interface PermissionCatalogItem {
+  key: string;
+  category: string;
+  label: string;
+}
+
+export interface RoleMatrix {
+  catalog: PermissionCatalogItem[];
+  system: Record<string, RoleMatrixEntry>;
+  department: Record<string, RoleMatrixEntry>;
+}
+
+export const accessApi = {
+  me: () => api.get<AccessMe>('/access/me').then((r) => r.data),
+  matrix: () => api.get<RoleMatrix>('/access/matrix').then((r) => r.data),
+  setRole: (scope: 'system' | 'department', role: string, permissions: string[]) =>
+    api.put<RoleMatrixEntry>(`/access/matrix/${scope}/${role}`, { permissions }).then((r) => r.data),
+  resetRole: (scope: 'system' | 'department', role: string) =>
+    api.delete(`/access/matrix/${scope}/${role}`).then((r) => r.data),
+};

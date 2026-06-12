@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Plus, Pencil, Trash2, GitBranch, UserPlus, UserMinus } from 'lucide-react';
-import { queuesApi, extensionsApi } from '@/lib/api';
+import { queuesApi, extensionsApi, departmentsApi } from '@/lib/api';
 import { DataTable, Column } from '@/components/DataTable';
 import { Modal } from '@/components/Modal';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -24,6 +24,7 @@ const schema = z.object({
   wrapup_time: z.coerce.number().min(0),
   service_level: z.coerce.number().min(1).max(600),
   announce_position: z.boolean(),
+  department_id: z.string().optional(),
 });
 type FormData = z.infer<typeof schema>;
 
@@ -61,13 +62,21 @@ export default function Queues() {
     enabled: Boolean(membersQueue),
   });
 
+  const { data: departmentsData } = useQuery({
+    queryKey: ['departments-list'],
+    queryFn: () => departmentsApi.list({ per_page: 200 }),
+  });
+
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: { strategy: 'ringall', max_wait: 300, max_callers: 20, wrapup_time: 30, service_level: 60, announce_position: true },
   });
 
   const upsert = useMutation({
-    mutationFn: (d: FormData) => editing ? queuesApi.update(editing.id, d) : queuesApi.create(d),
+    mutationFn: (d: FormData) => {
+      const body = { ...d, department_id: d.department_id || null };
+      return editing ? queuesApi.update(editing.id, body) : queuesApi.create(body);
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['queues'] }); setModalOpen(false); toast.success('Saved'); },
   });
 
@@ -139,7 +148,7 @@ export default function Queues() {
           </h1>
           <p className="text-sm text-surface-500 mt-0.5">{data?.total ?? 0} call queues</p>
         </div>
-        <button className="btn-primary" onClick={() => { setEditing(null); reset({ strategy: 'ringall', max_wait: 300, max_callers: 20, wrapup_time: 30, service_level: 60, announce_position: true }); setModalOpen(true); }}>
+        <button className="btn-primary" onClick={() => { setEditing(null); reset({ strategy: 'ringall', max_wait: 300, max_callers: 20, wrapup_time: 30, service_level: 60, announce_position: true, department_id: '' }); setModalOpen(true); }}>
           <Plus size={16} /> New Queue
         </button>
       </div>
@@ -186,6 +195,12 @@ export default function Queues() {
           </div>
           <Input label="Service Level Target (sec)" type="number" hint="Calls answered within this time count as within SLA" error={errors.service_level?.message} {...register('service_level')} />
           <Toggle label="Announce Position" description="Tell callers their position in queue" checked={announcePos} onChange={(v) => setValue('announce_position', v)} />
+          <Select
+            label="Department"
+            placeholder="— Unassigned —"
+            options={(departmentsData?.data ?? []).map((d) => ({ value: d.id, label: d.name }))}
+            {...register('department_id')}
+          />
         </form>
       </Modal>
 

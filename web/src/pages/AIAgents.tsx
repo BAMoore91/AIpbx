@@ -7,7 +7,7 @@ import {
   Plus, Pencil, Trash2, Brain, Send, Bot, User,
   ChevronRight, Sparkles, TestTube, X,
 } from 'lucide-react';
-import { aiAgentsApi, knowledgeBasesApi } from '@/lib/api';
+import { aiAgentsApi, knowledgeBasesApi, departmentsApi } from '@/lib/api';
 import { DataTable, Column } from '@/components/DataTable';
 import { Modal } from '@/components/Modal';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -71,6 +71,7 @@ const schema = z.object({
   knowledge_base_id: z.string().optional(),
   is_active: z.boolean(),
   tools: toolsSchema,
+  department_id: z.string().optional(),
 });
 type AgentFormData = z.infer<typeof schema>;
 
@@ -229,6 +230,12 @@ function AgentBuilderModal({
   const { data: kbsData } = useQuery({
     queryKey: ['knowledge-bases-list'],
     queryFn: () => knowledgeBasesApi.list({ per_page: 100 }),
+    enabled: open,
+  });
+
+  const { data: departmentsData } = useQuery({
+    queryKey: ['departments-list'],
+    queryFn: () => departmentsApi.list({ per_page: 200 }),
     enabled: open,
   });
 
@@ -452,6 +459,12 @@ function AgentBuilderModal({
               {...register('max_turns')}
             />
           </div>
+          <Select
+            label="Department"
+            placeholder="— Unassigned —"
+            options={(departmentsData?.data ?? []).map((d) => ({ value: d.id, label: d.name }))}
+            {...register('department_id')}
+          />
           <Toggle
             label="Active"
             description="Enable this agent to receive calls"
@@ -479,7 +492,10 @@ export default function AIAgents() {
   });
 
   const upsert = useMutation({
-    mutationFn: (d: AgentFormData) => editing ? aiAgentsApi.update(editing.id, d) : aiAgentsApi.create(d),
+    mutationFn: (d: AgentFormData) => {
+      const body = { ...d, department_id: d.department_id || null };
+      return editing ? aiAgentsApi.update(editing.id, body) : aiAgentsApi.create(body);
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['ai-agents'] });
       setBuilderOpen(false);

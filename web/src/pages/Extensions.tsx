@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Plus, Pencil, Trash2, Search, Phone, RefreshCw } from 'lucide-react';
-import { extensionsApi } from '@/lib/api';
+import { extensionsApi, departmentsApi } from '@/lib/api';
 import { DataTable, Column } from '@/components/DataTable';
 import { Modal } from '@/components/Modal';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -23,6 +23,7 @@ const schema = z.object({
   call_recording: z.enum(['disabled', 'on_demand', 'always']),
   dnd: z.boolean(),
   ring_timeout: z.coerce.number().min(5).max(120),
+  department_id: z.string().optional(),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -44,6 +45,11 @@ export default function Extensions() {
     queryFn: () => extensionsApi.list({ page, per_page: 20, search }),
   });
 
+  const { data: departmentsData } = useQuery({
+    queryKey: ['departments-list'],
+    queryFn: () => departmentsApi.list({ per_page: 200 }),
+  });
+
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -56,10 +62,12 @@ export default function Extensions() {
   });
 
   const upsert = useMutation({
-    mutationFn: (d: FormData) =>
-      editing
-        ? extensionsApi.update(editing.id, d)
-        : extensionsApi.create(d),
+    mutationFn: (d: FormData) => {
+      const body = { ...d, department_id: d.department_id || null };
+      return editing
+        ? extensionsApi.update(editing.id, body)
+        : extensionsApi.create(body);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['extensions'] });
       setModalOpen(false);
@@ -89,6 +97,7 @@ export default function Extensions() {
       dnd: false,
       ring_timeout: 30,
       sip_password: Math.random().toString(36).slice(2, 12),
+      department_id: '',
     });
     setModalOpen(true);
   };
@@ -105,6 +114,7 @@ export default function Extensions() {
       call_recording: ext.call_recording,
       dnd: ext.dnd,
       ring_timeout: ext.ring_timeout,
+      department_id: (ext as Extension & { department_id?: string }).department_id ?? '',
     });
     setModalOpen(true);
   };
@@ -280,6 +290,12 @@ export default function Extensions() {
             max={120}
             error={errors.ring_timeout?.message}
             {...register('ring_timeout')}
+          />
+          <Select
+            label="Department"
+            placeholder="— Unassigned —"
+            options={(departmentsData?.data ?? []).map((d) => ({ value: d.id, label: d.name }))}
+            {...register('department_id')}
           />
           <div className="grid grid-cols-2 gap-4 pt-1">
             <Toggle
