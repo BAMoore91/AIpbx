@@ -18,7 +18,7 @@ import { clsx } from 'clsx';
 const schema = z.object({
   number: z.string().min(1, 'Required'),
   name: z.string().min(1, 'Required'),
-  strategy: z.string().min(1, 'Required'),
+  strategy: z.enum(['ringall', 'roundrobin', 'leastrecent', 'fewestcalls', 'random']),
   max_wait: z.coerce.number().min(10),
   max_callers: z.coerce.number().min(1),
   wrapup_time: z.coerce.number().min(0),

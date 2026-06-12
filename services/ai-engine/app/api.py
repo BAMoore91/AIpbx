@@ -103,6 +103,23 @@ async def force_summary(call_uuid: str, request: Request) -> dict[str, Any]:
     return await session.force_summary()  # type: ignore[attr-defined]
 
 
+@router.post("/calls/{call_uuid}/end", status_code=202)
+async def end_call(call_uuid: str, request: Request) -> dict[str, Any]:
+    """Externally end an AI call (called by the API on channel hangup).
+
+    Idempotent: if there's an active session we signal it to terminate (which
+    triggers transcript persistence + post-call summary); otherwise we mark the
+    registration ended. Always 202 so the caller need not special-case races.
+    """
+    engine = _engine(request)
+    session = engine.registry.get_session(call_uuid)
+    if session is not None:
+        await session.request_end()  # type: ignore[attr-defined]
+        return {"ended": True, "call_uuid": call_uuid, "had_session": True}
+    await engine.registry.remove(call_uuid)
+    return {"ended": True, "call_uuid": call_uuid, "had_session": False}
+
+
 @router.post("/agents/{agent_id}/test")
 async def test_agent(agent_id: str, body: TestChat, request: Request) -> dict[str, Any]:
     """Text-only chat test harness for the console agent builder.

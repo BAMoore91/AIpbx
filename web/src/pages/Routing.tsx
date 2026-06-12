@@ -38,7 +38,7 @@ const didSchema = z.object({
   e164: z.string().min(7, 'Valid phone number required'),
   label: z.string().optional(),
   trunk_id: z.string().optional(),
-  dest_type: z.string().min(1, 'Required'),
+  dest_type: z.enum(['extension', 'ring_group', 'queue', 'ivr_menu', 'time_condition', 'ai_agent', 'voicemail', 'external']),
   dest_id: z.string().optional(),
   cnam: z.string().optional(),
   is_active: z.boolean().default(true),
@@ -209,7 +209,7 @@ function OutboundTab() {
 const rgSchema = z.object({
   number: z.string().min(1, 'Required'),
   name: z.string().min(1, 'Required'),
-  strategy: z.string().min(1, 'Required'),
+  strategy: z.enum(['ringall', 'roundrobin', 'leastrecent', 'fewestcalls', 'random']),
   ring_timeout: z.coerce.number().min(5).max(120),
 });
 type RGForm = z.infer<typeof rgSchema>;

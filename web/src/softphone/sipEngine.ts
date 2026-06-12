@@ -10,7 +10,6 @@ if (import.meta.env.PROD) {
 
 let ua: JsSIP.UA | null = null;
 let activeSession: RTCSession | null = null;
-let localAudio: HTMLAudioElement | null = null;
 let remoteAudio: HTMLAudioElement | null = null;
 
 function getOrCreateAudioEl(id: string): HTMLAudioElement {
@@ -93,7 +92,6 @@ export function placeCall(target: string, extension: Extension) {
   const wsUrl = import.meta.env.VITE_SIP_WSS_URL ?? 'wss://localhost:8089/ws';
   const domain = new URL(wsUrl.replace('wss://', 'https://').replace('ws://', 'http://')).hostname;
 
-  localAudio = getOrCreateAudioEl('sip-local-audio');
   remoteAudio = getOrCreateAudioEl('sip-remote-audio');
 
   const session = ua.call(`sip:${target}@${domain}`, {
@@ -142,7 +140,6 @@ export function answerCall() {
   const store = useSoftphoneStore.getState();
   const incoming = store.incomingCall;
 
-  localAudio = getOrCreateAudioEl('sip-local-audio');
   remoteAudio = getOrCreateAudioEl('sip-remote-audio');
 
   activeSession.answer({

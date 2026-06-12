@@ -418,6 +418,15 @@ class CallSession:
     # ------------------------------------------------------------------
     # Hangup + post-call persistence
     # ------------------------------------------------------------------
+    async def request_end(self) -> None:
+        """Public: externally signal the call to end (API /calls/{uuid}/end).
+
+        Sends an AudioSocket terminate so Asterisk hangs up the channel; the
+        read loop then unblocks, breaks, and runs _teardown() (which persists
+        the transcript and generates the post-call summary). Idempotent.
+        """
+        await self._request_hangup()
+
     async def _request_hangup(self) -> None:
         if self._hangup_requested and self._ended.is_set():
             return

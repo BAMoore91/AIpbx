@@ -218,6 +218,10 @@ export class AriController {
     await this.safeAnswer(ctx.channel);
     // Hand the channel + agent config to the AI engine; the dialplan bridges
     // RTP into the engine's AudioSocket. We set vars the dialplan reads.
+    // AI_UUID is the key the [aipbx-ai] dialplan context streams to AudioSocket
+    // as the first frame; it MUST equal the call_uuid we register with the
+    // engine (ctx.callId) so the engine matches this audio stream to the agent.
+    await this.setVar(ctx.channel, 'AI_UUID', ctx.callId);
     await this.setVar(ctx.channel, 'AIPBX_CALL_ID', ctx.callId);
     await this.setVar(ctx.channel, 'AIPBX_AGENT_ID', agent.id);
     await this.setVar(ctx.channel, 'AIPBX_TENANT', ctx.tenantId);
@@ -231,11 +235,11 @@ export class AriController {
       did: ctx.did,
     });
 
-    // Continue into the AudioSocket dialplan context that bridges to the engine.
+    // Continue into the [aipbx-ai] dialplan context that bridges to the engine.
     try {
-      await ctx.channel.continueInDialplan({ context: 'ai-audiosocket', extension: 's', priority: 1 });
+      await ctx.channel.continueInDialplan({ context: 'aipbx-ai', extension: 's', priority: 1 });
     } catch (err) {
-      logger.warn({ err: (err as Error).message }, 'continueInDialplan to ai-audiosocket failed');
+      logger.warn({ err: (err as Error).message }, 'continueInDialplan to aipbx-ai failed');
     }
     await this.markAnswered(ctx.callId);
   }
@@ -567,7 +571,7 @@ export class AriController {
     if (target.type === 'extension' && target.extension) {
       await this.originateTo(channel, target.extension.extension, tenantId);
     } else {
-      await channel.continueInDialplan({ context: 'from-internal', extension: destination, priority: 1 });
+      await channel.continueInDialplan({ context: 'aipbx-internal', extension: destination, priority: 1 });
     }
   }
 
@@ -619,7 +623,7 @@ export class AriController {
     if (target.type === 'extension' && target.extension) {
       await this.originateAndBridge(caller, `PJSIP/${target.extension.sip_username}`, 25);
     } else {
-      await caller.continueInDialplan({ context: 'from-internal', extension: number, priority: 1 });
+      await caller.continueInDialplan({ context: 'aipbx-internal', extension: number, priority: 1 });
     }
   }
 

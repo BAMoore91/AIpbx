@@ -7,6 +7,7 @@ interface BadgeProps {
   children: React.ReactNode;
   className?: string;
   dot?: boolean;
+  onClick?: () => void;
 }
 
 const dotColors: Record<Variant, string> = {
@@ -19,9 +20,9 @@ const dotColors: Record<Variant, string> = {
   accent: 'bg-accent-500',
 };
 
-export function Badge({ variant = 'neutral', children, className, dot }: BadgeProps) {
+export function Badge({ variant = 'neutral', children, className, dot, onClick }: BadgeProps) {
   return (
-    <span className={clsx(`badge-${variant}`, className)}>
+    <span className={clsx(`badge-${variant}`, className)} onClick={onClick}>
       {dot && <span className={clsx('w-1.5 h-1.5 rounded-full', dotColors[variant])} />}
       {children}
     </span>

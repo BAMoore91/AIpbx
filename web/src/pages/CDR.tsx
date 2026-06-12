@@ -344,7 +344,7 @@ export default function CDR() {
       key: 'recording_id',
       header: '',
       render: (r) => r.recording_id
-        ? <Mic size={13} className="text-primary-400" title="Has recording" />
+        ? <span title="Has recording"><Mic size={13} className="text-primary-400" /></span>
         : null,
     },
   ];

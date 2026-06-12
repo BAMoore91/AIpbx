@@ -16,9 +16,9 @@ import type { TimeCondition } from '@/lib/types';
 const schema = z.object({
   name: z.string().min(1, 'Required'),
   timezone: z.string().min(1, 'Required'),
-  match_dest_type: z.string().optional(),
+  match_dest_type: z.enum(['extension', 'ring_group', 'queue', 'ivr_menu', 'time_condition', 'ai_agent', 'voicemail', 'external']).optional(),
   match_dest_id: z.string().optional(),
-  nomatch_dest_type: z.string().optional(),
+  nomatch_dest_type: z.enum(['extension', 'ring_group', 'queue', 'ivr_menu', 'time_condition', 'ai_agent', 'voicemail', 'external']).optional(),
   nomatch_dest_id: z.string().optional(),
 });
 type FormData = z.infer<typeof schema>;

@@ -48,32 +48,22 @@ export class AiEngineClient {
     }
   }
 
-  /** Tell the engine to take over a channel with a given agent's config. */
+  /**
+   * Tell the engine to take over a channel with a given agent.
+   * Contract (matches ai-engine RegisterCall): the engine keys the upcoming
+   * AudioSocket connection by `call_uuid` (streamed by the dialplan as the
+   * first frame) and loads the full agent config from its own DB by `agent_id`.
+   * `call_uuid` MUST equal the value the dialplan passes to AudioSocket — the
+   * API sets channel var AI_UUID to this same callId before continuing.
+   */
   async notifyCall(input: NotifyCallInput): Promise<void> {
     await this.post('/calls', {
-      call_id: input.callId,
-      channel_id: input.channelId,
+      call_uuid: input.callId,
+      agent_id: input.agent.id,
       tenant_id: input.tenantId,
+      channel_id: input.channelId,
       caller_number: input.callerNumber,
       did: input.did,
-      agent: {
-        id: input.agent.id,
-        name: input.agent.name,
-        role: input.agent.role,
-        model: input.agent.model,
-        system_prompt: input.agent.system_prompt,
-        greeting: input.agent.greeting,
-        voice_id: input.agent.voice_id,
-        stt_provider: input.agent.stt_provider,
-        tts_provider: input.agent.tts_provider,
-        language: input.agent.language,
-        temperature_effort: input.agent.temperature_effort,
-        interruptible: input.agent.interruptible,
-        max_turns: input.agent.max_turns,
-        end_keywords: input.agent.end_keywords,
-        tools: input.agent.tools,
-        knowledge_base_id: input.agent.knowledge_base_id,
-      },
     });
   }
 

@@ -27,7 +27,7 @@ const KEYS = ['0','1','2','3','4','5','6','7','8','9','*','#'];
 
 const optionSchema = z.object({
   key: z.string().min(1),
-  dest_type: z.string().min(1),
+  dest_type: z.enum(['extension', 'ring_group', 'queue', 'ivr_menu', 'time_condition', 'ai_agent', 'voicemail', 'external']),
   dest_id: z.string().min(1, 'Required'),
   label: z.string().optional(),
 });

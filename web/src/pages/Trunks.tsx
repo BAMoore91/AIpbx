@@ -74,7 +74,7 @@ export default function Trunks() {
 
   const openEdit = (t: Trunk) => {
     setEditing(t);
-    reset({ ...t, port: t.port, max_channels: t.max_channels });
+    reset({ ...t, transport: t.transport as 'udp' | 'tcp' | 'tls', port: t.port, max_channels: t.max_channels });
     setModalOpen(true);
   };
 
