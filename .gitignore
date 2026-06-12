@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+**/node_modules/
+.pnp
+.pnp.js
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Build output
+dist/
+build/
+**/dist/
+**/build/
+web/dist/
+*.tsbuildinfo
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+!**/keys/.gitkeep
+secrets/
+terraform.tfvars
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+
+# Recordings / voicemail / runtime data
+data/
+recordings/
+voicemail/
+asterisk/spool/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+coverage/
