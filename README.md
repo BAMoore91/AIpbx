@@ -131,6 +131,7 @@ for the lowest voice latency.
 - `docs/API.md` — REST + WebSocket reference
 - `docs/AI_AGENTS.md` — building AI voice agents
 - `docs/MULTI_TENANCY.md` — tenant model, isolation, plan limits, superadmin ops
+- `docs/ACCESS_ROLES.md` — per-department RBAC, customizable role matrix (3CX-style)
 - `docs/INTEGRATIONS.md` — carrier integrations (automatic Twilio SIP trunking)
 - `docs/OPERATIONS.md` — runbook, scaling, backups
 

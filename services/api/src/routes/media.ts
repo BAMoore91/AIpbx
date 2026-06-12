@@ -12,6 +12,8 @@ import {
   clientIp,
 } from './helpers.js';
 import type { RecordingRow, VoicemailRow } from '../types/db.js';
+import { visibleDepartments, can } from '../auth/access.js';
+import { forbidden } from '../errors.js';
 
 /** Recordings, transcripts, and voicemails with presigned S3 download URLs. */
 export async function mediaRoutes(app: FastifyInstance): Promise<void> {
@@ -19,16 +21,28 @@ export async function mediaRoutes(app: FastifyInstance): Promise<void> {
   const write = { preHandler: [app.authenticate] };
 
   // ---- Recordings ---------------------------------------------------------
+  // Recordings inherit their department from the parent call. Users without
+  // tenant-wide recordings.view see only recordings for calls in departments
+  // where their department role grants it.
   app.get('/recordings', read, async (request, reply) => {
     const auth = requireAuth(request);
     const { page, pageSize } = parse(PaginationQuery, request.query);
+    const vis = await visibleDepartments(auth, 'recordings.view');
+    const where = ['r.tenant_id = $1'];
+    const params: unknown[] = [auth.tenantId];
+    if (vis !== 'all') {
+      params.push(vis);
+      where.push(`c.department_id = ANY($${params.length}::uuid[])`);
+    }
+    const whereSql = where.join(' AND ');
     const rows = await query<RecordingRow>(
-      `SELECT * FROM recordings WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
-      [auth.tenantId, pageSize, offset(page, pageSize)],
+      `SELECT r.* FROM recordings r LEFT JOIN calls c ON c.id = r.call_id
+        WHERE ${whereSql} ORDER BY r.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      [...params, pageSize, offset(page, pageSize)],
     );
     const count = await queryOne<{ count: string }>(
-      `SELECT count(*)::text AS count FROM recordings WHERE tenant_id = $1`,
-      [auth.tenantId],
+      `SELECT count(*)::text AS count FROM recordings r LEFT JOIN calls c ON c.id = r.call_id WHERE ${whereSql}`,
+      params,
     );
     return reply.send(paginate(rows.rows, Number(count?.count ?? 0), page, pageSize));
   });
@@ -36,11 +50,16 @@ export async function mediaRoutes(app: FastifyInstance): Promise<void> {
   app.get('/recordings/:id/download', read, async (request, reply) => {
     const auth = requireAuth(request);
     const { id } = request.params as { id: string };
-    const rec = await queryOne<RecordingRow>(
-      `SELECT * FROM recordings WHERE tenant_id = $1 AND id = $2`,
+    const rec = await queryOne<RecordingRow & { department_id: string | null }>(
+      `SELECT r.*, c.department_id FROM recordings r
+         LEFT JOIN calls c ON c.id = r.call_id
+        WHERE r.tenant_id = $1 AND r.id = $2`,
       [auth.tenantId, id],
     );
     if (!rec) throw notFound('Recording not found');
+    if (!(await can(auth, 'recordings.view', rec.department_id))) {
+      throw forbidden('Missing permission: recordings.view');
+    }
     const url = await app.ctx.s3.presignedGet(rec.s3_key, 900);
     return reply.send({ url, expiresIn: 900, format: rec.format });
   });

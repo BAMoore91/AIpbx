@@ -11,6 +11,8 @@ import { dashboardRoutes } from './dashboard.js';
 import { controlRoutes } from './control.js';
 import { integrationRoutes } from './integrations.js';
 import { tenantRoutes } from './tenants.js';
+import { departmentRoutes } from './departments.js';
+import { rbacRoutes } from './rbac.js';
 
 /** Mounts all v1 routes under the `/api` prefix. */
 export async function registerApiRoutes(
@@ -21,6 +23,8 @@ export async function registerApiRoutes(
     async (api) => {
       await authRoutes(api);
       await tenantRoutes(api);
+      await departmentRoutes(api);
+      await rbacRoutes(api);
       await userRoutes(api);
       registerResourceRoutes(api, ari);
       await nestedRoutes(api);

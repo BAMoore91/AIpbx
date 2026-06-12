@@ -411,6 +411,67 @@ CREATE TABLE webhooks (
 );
 
 -- ---------------------------------------------------------------------------
+-- Departments + per-department role-based access control (3CX-style)
+--   - departments: org sub-units (a.k.a. "groups")
+--   - department_members: a user's role WITHIN a department (owner/manager/
+--     receptionist/user). A user may belong to many departments with different
+--     roles. The system-wide role lives on users.role.
+--   - role_permissions: per-tenant customization of what each role may do
+--     (overrides the in-code defaults — brings back V18-style customizable roles)
+--   - resources carry an optional department_id so access can be scoped
+-- ---------------------------------------------------------------------------
+CREATE TABLE departments (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id       UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    name            TEXT NOT NULL,
+    description     TEXT,
+    manager_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    settings        JSONB NOT NULL DEFAULT '{}',
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (tenant_id, name)
+);
+CREATE INDEX idx_dept_tenant ON departments(tenant_id);
+
+CREATE TABLE department_members (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    department_id   UUID NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
+    user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role            TEXT NOT NULL DEFAULT 'user',   -- owner|manager|receptionist|user
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (department_id, user_id)
+);
+CREATE INDEX idx_deptmember_user ON department_members(user_id);
+CREATE INDEX idx_deptmember_dept ON department_members(department_id);
+
+-- Per-tenant role → permission overrides. Absence of a row means "use the
+-- in-code default" for that (role, permission). `scope` distinguishes the
+-- system role table from the department role table since names can overlap.
+CREATE TABLE role_permissions (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id       UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    scope           TEXT NOT NULL,                  -- 'system' | 'department'
+    role            TEXT NOT NULL,                  -- admin|supervisor|... or owner|manager|...
+    permission      TEXT NOT NULL,                  -- e.g. recordings.view
+    allowed         BOOLEAN NOT NULL,
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (tenant_id, scope, role, permission)
+);
+CREATE INDEX idx_roleperm_tenant ON role_permissions(tenant_id);
+
+-- Tag routable/owned resources to a department (NULL = org-wide / unassigned).
+ALTER TABLE extensions      ADD COLUMN department_id UUID REFERENCES departments(id) ON DELETE SET NULL;
+ALTER TABLE queues          ADD COLUMN department_id UUID REFERENCES departments(id) ON DELETE SET NULL;
+ALTER TABLE ring_groups     ADD COLUMN department_id UUID REFERENCES departments(id) ON DELETE SET NULL;
+ALTER TABLE ivr_menus       ADD COLUMN department_id UUID REFERENCES departments(id) ON DELETE SET NULL;
+ALTER TABLE ai_agents       ADD COLUMN department_id UUID REFERENCES departments(id) ON DELETE SET NULL;
+ALTER TABLE did_numbers     ADD COLUMN department_id UUID REFERENCES departments(id) ON DELETE SET NULL;
+ALTER TABLE calls           ADD COLUMN department_id UUID REFERENCES departments(id) ON DELETE SET NULL;
+CREATE INDEX idx_ext_dept   ON extensions(department_id);
+CREATE INDEX idx_queue_dept ON queues(department_id);
+CREATE INDEX idx_calls_dept ON calls(department_id);
+
+-- ---------------------------------------------------------------------------
 -- Seed: default super-tenant + admin (password: ChangeMe123! — argon2 placeholder)
 -- Replace the hash post-deploy via the API. See deploy/scripts/seed.sql.
 -- ---------------------------------------------------------------------------

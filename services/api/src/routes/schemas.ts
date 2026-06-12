@@ -23,6 +23,7 @@ export const userUpdate = z.object({
 });
 
 export const extensionCreate = z.object({
+  department_id: z.string().uuid().nullable().optional(),
   extension: z.string().min(1),
   display_name: z.string().optional(),
   sip_username: z.string().min(1),
@@ -63,6 +64,7 @@ export const trunkCreate = z.object({
 export const trunkUpdate = trunkCreate.partial();
 
 export const didCreate = z.object({
+  department_id: z.string().uuid().nullable().optional(),
   trunk_id: z.string().uuid().optional(),
   e164: z.string().min(2),
   label: z.string().optional(),
@@ -85,6 +87,7 @@ export const outboundRouteCreate = z.object({
 export const outboundRouteUpdate = outboundRouteCreate.partial();
 
 export const ringGroupCreate = z.object({
+  department_id: z.string().uuid().nullable().optional(),
   number: z.string().min(1),
   name: z.string().min(1),
   strategy: z.enum(['ringall', 'hunt', 'memoryhunt', 'random']).default('ringall'),
@@ -96,6 +99,7 @@ export const ringGroupCreate = z.object({
 export const ringGroupUpdate = ringGroupCreate.partial();
 
 export const queueCreate = z.object({
+  department_id: z.string().uuid().nullable().optional(),
   number: z.string().min(1),
   name: z.string().min(1),
   strategy: z.enum(['ringall', 'leastrecent', 'fewestcalls', 'rrmemory', 'linear']).default('rrmemory'),
@@ -118,6 +122,7 @@ export const queueMemberCreate = z.object({
 });
 
 export const ivrCreate = z.object({
+  department_id: z.string().uuid().nullable().optional(),
   number: z.string().min(1),
   name: z.string().min(1),
   greeting_type: z.enum(['tts', 'upload', 'ai']).default('tts'),
@@ -146,6 +151,7 @@ export const timeConditionCreate = z.object({
 export const timeConditionUpdate = timeConditionCreate.partial();
 
 export const aiAgentCreate = z.object({
+  department_id: z.string().uuid().nullable().optional(),
   name: z.string().min(1),
   number: z.string().optional(),
   role: z.enum(['receptionist', 'sales', 'support', 'survey', 'outbound']).default('receptionist'),

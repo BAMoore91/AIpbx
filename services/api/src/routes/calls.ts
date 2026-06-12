@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { query, queryOne } from '../db.js';
 import { notFound } from '../errors.js';
 import { parse, requireAuth, paginate, offset } from './helpers.js';
+import { visibleDepartments } from '../auth/access.js';
 
 const CallFilter = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -41,6 +42,14 @@ export async function callRoutes(app: FastifyInstance): Promise<void> {
     if (f.number) {
       params.push(`%${f.number}%`);
       where.push(`(from_number ILIKE $${params.length} OR to_number ILIKE $${params.length})`);
+    }
+
+    // Department-scoped visibility: users without tenant-wide cdr.view see only
+    // calls in the departments where their department role grants it.
+    const vis = await visibleDepartments(auth, 'cdr.view');
+    if (vis !== 'all') {
+      params.push(vis);
+      where.push(`department_id = ANY($${params.length}::uuid[])`);
     }
 
     const whereSql = where.join(' AND ');

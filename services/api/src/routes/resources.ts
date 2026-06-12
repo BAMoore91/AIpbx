@@ -36,6 +36,7 @@ export function registerResourceRoutes(
   registerCrud<unknown, unknown>(app, {
     resource: 'extensions',
     table: 'extensions',
+    writePermission: 'extensions.manage',
     createSchema: S.extensionCreate,
     updateSchema: S.extensionUpdate,
     beforeCreate: async (data, tenantId) => {
@@ -60,6 +61,7 @@ export function registerResourceRoutes(
   registerCrud<unknown, unknown>(app, {
     resource: 'trunks',
     table: 'trunks',
+    writePermission: 'trunks.manage',
     createSchema: S.trunkCreate,
     updateSchema: S.trunkUpdate,
     beforeCreate: (data) => {
@@ -78,15 +80,15 @@ export function registerResourceRoutes(
     redact: redactSecret('secret'),
   });
 
-  registerCrud(app, { resource: 'did_numbers', table: 'did_numbers', createSchema: S.didCreate, updateSchema: S.didUpdate });
-  registerCrud(app, { resource: 'outbound_routes', table: 'outbound_routes', orderBy: 'priority ASC', createSchema: S.outboundRouteCreate, updateSchema: S.outboundRouteUpdate });
-  registerCrud(app, { resource: 'ring_groups', table: 'ring_groups', createSchema: S.ringGroupCreate, updateSchema: S.ringGroupUpdate });
-  registerCrud(app, { resource: 'queues', table: 'queues', createSchema: S.queueCreate, updateSchema: S.queueUpdate });
-  registerCrud(app, { resource: 'ivr_menus', table: 'ivr_menus', createSchema: S.ivrCreate, updateSchema: S.ivrUpdate });
-  registerCrud(app, { resource: 'time_conditions', table: 'time_conditions', createSchema: S.timeConditionCreate, updateSchema: S.timeConditionUpdate, jsonbColumns: ['rules', 'holidays'] });
-  registerCrud(app, { resource: 'ai_agents', table: 'ai_agents', createSchema: S.aiAgentCreate, updateSchema: S.aiAgentUpdate, jsonbColumns: ['tools', 'settings'] });
-  registerCrud(app, { resource: 'knowledge_bases', table: 'knowledge_bases', createSchema: S.knowledgeBaseCreate, updateSchema: S.knowledgeBaseUpdate });
-  registerCrud(app, { resource: 'webhooks', table: 'webhooks', createSchema: S.webhookCreate, updateSchema: S.webhookUpdate, redact: redactSecret('secret') });
+  registerCrud(app, { resource: 'did_numbers', table: 'did_numbers', writePermission: 'routing.manage', createSchema: S.didCreate, updateSchema: S.didUpdate });
+  registerCrud(app, { resource: 'outbound_routes', table: 'outbound_routes', writePermission: 'routing.manage', orderBy: 'priority ASC', createSchema: S.outboundRouteCreate, updateSchema: S.outboundRouteUpdate });
+  registerCrud(app, { resource: 'ring_groups', table: 'ring_groups', writePermission: 'queues.manage', createSchema: S.ringGroupCreate, updateSchema: S.ringGroupUpdate });
+  registerCrud(app, { resource: 'queues', table: 'queues', writePermission: 'queues.manage', createSchema: S.queueCreate, updateSchema: S.queueUpdate });
+  registerCrud(app, { resource: 'ivr_menus', table: 'ivr_menus', writePermission: 'routing.manage', createSchema: S.ivrCreate, updateSchema: S.ivrUpdate });
+  registerCrud(app, { resource: 'time_conditions', table: 'time_conditions', writePermission: 'routing.manage', createSchema: S.timeConditionCreate, updateSchema: S.timeConditionUpdate, jsonbColumns: ['rules', 'holidays'] });
+  registerCrud(app, { resource: 'ai_agents', table: 'ai_agents', writePermission: 'ai.manage', createSchema: S.aiAgentCreate, updateSchema: S.aiAgentUpdate, jsonbColumns: ['tools', 'settings'] });
+  registerCrud(app, { resource: 'knowledge_bases', table: 'knowledge_bases', writePermission: 'ai.manage', createSchema: S.knowledgeBaseCreate, updateSchema: S.knowledgeBaseUpdate });
+  registerCrud(app, { resource: 'webhooks', table: 'webhooks', writePermission: 'settings.manage', createSchema: S.webhookCreate, updateSchema: S.webhookUpdate, redact: redactSecret('secret') });
 }
 
 function redactSecret(col: string) {

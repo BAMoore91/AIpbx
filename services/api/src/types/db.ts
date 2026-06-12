@@ -87,6 +87,7 @@ export interface AuditLogRow {
 export interface ExtensionRow {
   id: UUID;
   tenant_id: UUID;
+  department_id?: UUID | null;
   user_id: UUID | null;
   extension: string;
   display_name: string | null;
@@ -120,6 +121,7 @@ export interface EndpointStatusRow {
 export interface TrunkRow {
   id: UUID;
   tenant_id: UUID;
+  department_id?: UUID | null;
   name: string;
   provider: string | null;
   host: string;
@@ -143,6 +145,7 @@ export interface TrunkRow {
 export interface DidNumberRow {
   id: UUID;
   tenant_id: UUID;
+  department_id?: UUID | null;
   trunk_id: UUID | null;
   e164: string;
   label: string | null;
@@ -169,6 +172,7 @@ export interface OutboundRouteRow {
 export interface RingGroupRow {
   id: UUID;
   tenant_id: UUID;
+  department_id?: UUID | null;
   number: string;
   name: string;
   strategy: string;
@@ -182,6 +186,7 @@ export interface RingGroupRow {
 export interface QueueRow {
   id: UUID;
   tenant_id: UUID;
+  department_id?: UUID | null;
   number: string;
   name: string;
   strategy: string;
@@ -210,6 +215,7 @@ export interface QueueMemberRow {
 export interface IvrMenuRow {
   id: UUID;
   tenant_id: UUID;
+  department_id?: UUID | null;
   number: string;
   name: string;
   greeting_type: string;
@@ -242,6 +248,7 @@ export interface TimeConditionRow {
 export interface AiAgentRow {
   id: UUID;
   tenant_id: UUID;
+  department_id?: UUID | null;
   name: string;
   number: string | null;
   role: string;
@@ -288,6 +295,7 @@ export interface KbDocumentRow {
 export interface CallRow {
   id: UUID;
   tenant_id: UUID;
+  department_id?: UUID | null;
   channel_id: string | null;
   linkedid: string | null;
   direction: CallDirection;

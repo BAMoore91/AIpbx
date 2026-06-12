@@ -145,6 +145,7 @@ export class AriController {
       toNumber: dialed,
       fromNumber: callerNumber,
       fromName: callerName,
+      departmentId: did?.department_id ?? this.departmentOfTarget(target),
     });
 
     await this.events.emit(tenantId, 'call.started', {
@@ -418,14 +419,27 @@ export class AriController {
     toNumber: string;
     fromNumber: string | null;
     fromName: string | null;
+    departmentId?: string | null;
   }): Promise<string> {
     const id = randomUUID();
     await query(
-      `INSERT INTO calls (id, tenant_id, channel_id, linkedid, direction, from_number, from_name, to_number, did, status)
-       VALUES ($1,$2,$3,$3,$4,$5,$6,$7,$8,'ringing')`,
-      [id, p.tenantId, p.channel.id, p.direction, p.fromNumber, p.fromName, p.toNumber, p.did],
+      `INSERT INTO calls (id, tenant_id, channel_id, linkedid, direction, from_number, from_name, to_number, did, department_id, status)
+       VALUES ($1,$2,$3,$3,$4,$5,$6,$7,$8,$9,'ringing')`,
+      [id, p.tenantId, p.channel.id, p.direction, p.fromNumber, p.fromName, p.toNumber, p.did, p.departmentId ?? null],
     );
     return id;
+  }
+
+  /** The department a routed target belongs to (for CDR/recording scoping). */
+  private departmentOfTarget(target: RouteTarget): string | null {
+    return (
+      target.extension?.department_id ??
+      target.queue?.department_id ??
+      target.ringGroup?.department_id ??
+      target.aiAgent?.department_id ??
+      target.ivr?.department_id ??
+      null
+    );
   }
 
   private async markAnswered(callId: string): Promise<void> {

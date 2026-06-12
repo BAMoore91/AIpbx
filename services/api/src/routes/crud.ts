@@ -14,6 +14,8 @@ import {
   clientIp,
 } from './helpers.js';
 import type { UserRole } from '../types/db.js';
+import { requirePermission } from '../auth/access.js';
+import type { Permission } from '../auth/permissions.js';
 
 /**
  * Generic tenant-scoped CRUD route generator. Every row carries a tenant_id and
@@ -29,6 +31,8 @@ export interface CrudOptions<TCreate, TUpdate> {
   updateSchema: z.ZodType<TUpdate>;
   /** Roles allowed to mutate. Read is allowed to any authenticated user. */
   writeRoles?: UserRole[];
+  /** Fine-grained permission required to mutate (takes precedence over roles). */
+  writePermission?: Permission;
   /** Optional column list to order list results by (default created_at DESC). */
   orderBy?: string;
   /** Transform the create payload before insert (e.g. encrypt secrets). */
@@ -63,7 +67,13 @@ export function registerCrud<TCreate, TUpdate>(
   const norm = (col: string, value: unknown): unknown => normalize(value, jsonbCols.has(col));
 
   const base = `/${resource}`;
-  const writeGuard = { preHandler: [app.authenticate, app.requireRole(...writeRoles)] };
+  // Prefer fine-grained permission gating when a writePermission is configured;
+  // otherwise fall back to coarse role gating.
+  const writeGuard = {
+    preHandler: opts.writePermission
+      ? [app.authenticate, requirePermission(opts.writePermission)]
+      : [app.authenticate, app.requireRole(...writeRoles)],
+  };
   const readGuard = { preHandler: [app.authenticate] };
 
   // LIST
