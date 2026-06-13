@@ -11,6 +11,8 @@ locals {
     domain             = var.domain
     fqdn               = local.fqdn
     acme_email         = var.acme_email
+    admin_email        = var.admin_email
+    admin_password     = var.admin_password
     public_ip          = digitalocean_reserved_ip.aipbx.ip_address
     postgres_password  = var.postgres_password
     redis_password     = var.redis_password

@@ -10,8 +10,10 @@ configuration files for the AIpbx telephony core.
 ```
 asterisk/
 ├── Dockerfile              # Image build (based on andrius/asterisk:20-current)
-├── entrypoint.sh           # Container start: envsubst → DTLS cert → exec asterisk
+├── entrypoint.sh           # Container start: envsubst → ODBC → DTLS cert → exec asterisk
 └── etc/
+    ├── odbcinst.ini        # ODBC driver registration template (→ /etc/odbcinst.ini)
+    ├── odbc.ini            # ODBC DSN template (→ /etc/odbc.ini)
     └── asterisk/           # All config files (copied into /etc/asterisk in image)
         ├── asterisk.conf   # Core process settings
         ├── modules.conf    # Module load/noload directives
@@ -20,6 +22,9 @@ asterisk/
         ├── ari.conf        # ARI credentials and CORS
         ├── rtp.conf        # RTP port range, ICE/STUN, DTLS-SRTP settings
         ├── extensions.conf # Dialplan (internal, Stasis, AI bridge, outbound, trunks)
+        ├── res_odbc.conf   # ODBC connection pool (DSN "asterisk" → "asterisk-pg")
+        ├── extconfig.conf  # Realtime family → ODBC backend mappings (ps_* tables)
+        ├── sorcery.conf    # Sorcery wizard mappings: PJSIP objects → realtime
         ├── voicemail.conf  # Voicemail mailboxes and settings
         ├── queues.conf     # ACD queue definitions (api manages members dynamically)
         ├── confbridge.conf # ConfBridge conference profiles
@@ -46,6 +51,10 @@ All `${VAR}` placeholders in `etc/asterisk/*.conf` are substituted by
 | `ARI_USERNAME`  | (required)| ARI and AMI username                        |
 | `ARI_PASSWORD`  | (required)| ARI and AMI password                        |
 | `ARI_APP`       | aipbx     | Stasis application name                     |
+| `DATABASE_URL`  | (required for realtime) | `postgresql://USER:PASS@HOST:PORT/DB` — parsed into PG_* vars |
+
+`entrypoint.sh` parses `DATABASE_URL` and exports:
+`PG_USER`, `PG_PASSWORD`, `PG_HOST` (default `postgres`), `PG_PORT` (default `5432`), `PG_DB` (default `aipbx`).
 
 Set these in `.env` (project root) and they are passed to the container via
 `docker-compose.yml`.
@@ -135,7 +144,97 @@ associated ARI channel and call context.
 7. When the AI session ends, ai-engine sends type `0x00` → Asterisk returns
    from `AudioSocket()` → subroutine returns → api service regains control.
 
-### 3. WebRTC softphone (JsSIP / SIP.js)
+### 3. PJSIP Realtime (ODBC → Postgres)
+
+The control-plane (api service) creates and updates SIP endpoints, credentials,
+and address-of-records by writing rows directly to Postgres tables (`ps_endpoints`,
+`ps_auths`, `ps_aors`, `ps_contacts`, `ps_endpoint_id_ips`, `ps_registrations`).
+Asterisk reads these tables live via the following chain:
+
+```
+api service
+    │  INSERT/UPDATE ps_endpoints, ps_auths, ps_aors, ...
+    ▼
+PostgreSQL (aipbx database)
+    │  ODBC connection via DSN "asterisk-pg"
+    ▼
+res_odbc.so  (connection pool [asterisk] in res_odbc.conf)
+    │  realtime driver translates object reads/writes to SQL
+    ▼
+res_config_odbc.so  (extconfig.conf: ps_endpoints => odbc,asterisk)
+    │  sorcery "realtime" wizard
+    ▼
+res_sorcery_realtime.so  (sorcery.conf: endpoint = realtime,ps_endpoints)
+    │
+    ▼
+res_pjsip.so — endpoints/auths/aors are resolved live from DB
+```
+
+**Static vs. realtime coexistence** — Asterisk merges both sources.  The
+transports (`transport-udp`, `transport-tcp`, `transport-tls`, `transport-wss`)
+and seed endpoints (1001, 1002, anonymous) remain in `pjsip.conf` and are loaded
+by the default sorcery "config" wizard.  Realtime objects from Postgres are merged
+in alongside them — there is no conflict.
+
+**Contact registration** — when a UA sends a REGISTER, Asterisk writes the
+contact record back to `ps_contacts` via the same realtime path.  This means
+contacts survive Asterisk restarts (the DB persists them) and multiple Asterisk
+nodes can share the contact table for horizontal scaling.
+
+**DSN templating chain:**
+```
+DATABASE_URL (env)
+    │  parsed by entrypoint.sh
+    ▼
+PG_USER / PG_PASSWORD / PG_HOST / PG_PORT / PG_DB (exported)
+    │  envsubst
+    ▼
+/etc/odbc.ini           ← [asterisk-pg] Servername=${PG_HOST} Port=${PG_PORT} ...
+/etc/odbcinst.ini       ← [PostgreSQL] Driver=/usr/lib/.../psqlodbcw.so
+/etc/asterisk/res_odbc.conf  ← [asterisk] dsn=asterisk-pg username=${PG_USER} ...
+```
+
+#### Debugging realtime
+
+```bash
+# Verify the ODBC connection pool is up
+docker compose exec asterisk asterisk -rx "odbc show"
+
+# List all endpoints (static + realtime merged)
+docker compose exec asterisk asterisk -rx "pjsip show endpoints"
+
+# Show a specific realtime endpoint
+docker compose exec asterisk asterisk -rx "pjsip show endpoint <id>"
+
+# Show registered contacts (from ps_contacts)
+docker compose exec asterisk asterisk -rx "pjsip show contacts"
+
+# Show AORs and their current registrations
+docker compose exec asterisk asterisk -rx "pjsip show aors"
+
+# Force Asterisk to re-read realtime config (no restart needed)
+docker compose exec asterisk asterisk -rx "module reload res_pjsip.so"
+
+# Inspect a realtime family directly
+docker compose exec asterisk asterisk -rx "realtime show ps_endpoints"
+
+# Test the ODBC DSN from the command line inside the container
+docker compose exec asterisk isql -v asterisk-pg "${PG_USER}" "${PG_PASSWORD}"
+```
+
+#### Module load order
+
+The following load order in `modules.conf` is critical:
+
+1. `res_odbc.so` (preload) — establishes the ODBC connection pool
+2. `res_config_odbc.so` (preload) — registers the odbc realtime driver
+3. `res_sorcery_realtime.so` (preload) — provides the "realtime" wizard
+4. `res_pjsip.so` (load) — reads sorcery.conf and begins querying realtime
+
+If `res_odbc` is not ready before `res_pjsip` initialises, the realtime
+families will fail to register and endpoints will not be found in the DB.
+
+### 4. WebRTC softphone (JsSIP / SIP.js)
 
 Browser phones connect over WSS:
 

@@ -33,6 +33,12 @@ migrate: ## (Re)apply DB schema
 seed: ## Seed default admin & demo data
 	docker compose exec -T postgres psql -U $${POSTGRES_USER:-aipbx} -d $${POSTGRES_DB:-aipbx} < deploy/scripts/seed.sql
 
+create-admin: ## Create/reset a superadmin (usage: make create-admin EMAIL=you@co.com PASSWORD=secret)
+	docker compose exec -T api node dist/scripts/create-admin.js "$${EMAIL:?set EMAIL=...}" "$${PASSWORD:?set PASSWORD=...}"
+
+realtime: ## (Re)apply the Asterisk PJSIP realtime schema
+	docker compose exec -T postgres psql -U $${POSTGRES_USER:-aipbx} -d $${POSTGRES_DB:-aipbx} < db/asterisk_realtime.sql
+
 asterisk-cli: ## Open Asterisk CLI
 	docker compose exec asterisk asterisk -rvvv
 

@@ -7,6 +7,7 @@ import { buildApp } from './app.js';
 import { AriController } from './ari/controller.js';
 import { EventBus } from './events.js';
 import { WsHub } from './ws/hub.js';
+import { bootstrapAdminFromEnv } from './bootstrap.js';
 
 /**
  * Service entrypoint. Boots config → datastores → context → ARI → HTTP+WS, then
@@ -23,6 +24,9 @@ async function main(): Promise<void> {
   // Shared singletons.
   const ctx = buildContext(config);
   const events = new EventBus(ctx.webhooks);
+
+  // First-run admin bootstrap (no-op unless BOOTSTRAP_ADMIN_* env are set).
+  await bootstrapAdminFromEnv();
 
   // ARI controller (Stasis routing + call control). Non-fatal if Asterisk is
   // unreachable: the API still serves CRUD.

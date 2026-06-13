@@ -53,6 +53,8 @@ write_files:
       API_PORT=3000
       JWT_SECRET=${jwt_secret}
       JWT_REFRESH_SECRET=${jwt_refresh_secret}
+      BOOTSTRAP_ADMIN_EMAIL=${admin_email}
+      BOOTSTRAP_ADMIN_PASSWORD=${admin_password}
       JWT_ACCESS_TTL=900
       JWT_REFRESH_TTL=2592000
       CORS_ORIGINS=https://${fqdn}

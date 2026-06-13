@@ -76,6 +76,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Apply schema
         run: PGPASSWORD=postgres psql -h localhost -U postgres -d aipbx -v ON_ERROR_STOP=1 -f db/schema.sql
+      - name: Apply Asterisk realtime schema
+        run: PGPASSWORD=postgres psql -h localhost -U postgres -d aipbx -v ON_ERROR_STOP=1 -f db/asterisk_realtime.sql
+      - name: Apply RBAC migration (idempotent)
+        run: PGPASSWORD=postgres psql -h localhost -U postgres -d aipbx -v ON_ERROR_STOP=1 -f db/migrations/002_departments_rbac.sql
 
   compose:
     name: docker-compose validate

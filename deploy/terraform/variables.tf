@@ -68,6 +68,17 @@ variable "acme_email" {
   type        = string
 }
 
+variable "admin_email" {
+  description = "Bootstrap platform superadmin email (created on first boot)."
+  type        = string
+}
+
+variable "admin_password" {
+  description = "Bootstrap platform superadmin password (created on first boot). Use a strong value."
+  type        = string
+  sensitive   = true
+}
+
 # ----------------------------------------------------------------------------
 # SSH access
 # ----------------------------------------------------------------------------
