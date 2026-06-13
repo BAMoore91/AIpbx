@@ -61,6 +61,7 @@ Key values (see `variables.tf` for the full list):
 | `droplet_size` | `s-4vcpu-8gb` recommended minimum for production call load |
 | `domain` / `subdomain` | DNS root + subdomain → FQDN `pbx.example.com` |
 | `acme_email` | contact email for Let's Encrypt |
+| `admin_email` / `admin_password` | **your console superadmin — created automatically on first boot** |
 | `ssh_key_fingerprint` | from `doctl compute ssh-key list` |
 | `allowed_ssh_ips` | lock SSH to your office/VPN CIDR (don't leave `0.0.0.0/0`) |
 | `repo_url` / `repo_branch` | where cloud-init clones from |
@@ -96,11 +97,14 @@ cd /opt/aipbx && docker compose ps        # all services 'running'/'healthy'
 ```
 cloud-init installs Docker, writes `/opt/aipbx/.env` (FQDN + your secrets),
 runs `docker compose up -d --build`, installs a `systemd` unit so the stack
-restarts on reboot, and issues the Let's Encrypt cert.
+restarts on reboot, **creates your superadmin** from `admin_email`/`admin_password`,
+and issues the Let's Encrypt cert. Extensions/trunks you create later provision
+into Asterisk live via PJSIP realtime (no config edits or reloads needed).
 
 ### 5. Open the console
-Browse to **`https://pbx.<your-domain>`** (also `terraform output app_url`).
-Then do the **Post-deploy** steps below.
+Browse to **`https://pbx.<your-domain>`** (also `terraform output app_url`) and
+**log in with `admin_email` / `admin_password`** — it works out of the box. Then
+do the **Post-deploy** steps below.
 
 ---
 
@@ -121,8 +125,11 @@ Then do the **Post-deploy** steps below.
    JWT_SECRET=... JWT_REFRESH_SECRET=... ENCRYPTION_KEY=... ARI_PASSWORD=... \
    ANTHROPIC_API_KEY=... DEEPGRAM_API_KEY=... ELEVENLABS_API_KEY=... \
    S3_ACCESS_KEY=... S3_SECRET_KEY=... \
+   BOOTSTRAP_ADMIN_EMAIL=admin@example.com BOOTSTRAP_ADMIN_PASSWORD='StrongPass!' \
    bash bootstrap.sh
    ```
+   (Setting `BOOTSTRAP_ADMIN_*` creates a working superadmin on startup. If you
+   skip them, create one later with `make create-admin EMAIL=.. PASSWORD=..`.)
 5. **TLS:**
    ```bash
    cd /opt/aipbx
@@ -136,25 +143,35 @@ Then do the **Post-deploy** steps below.
 
 Run from the droplet, in `/opt/aipbx`.
 
-1. **Apply the schema is automatic** (Postgres init), but on an existing DB run
-   migrations: `make migrate` then `psql "$DATABASE_URL" -f db/migrations/002_departments_rbac.sql`.
-2. **Seed the first admin + demo data:**
+1. **Schema is applied automatically** on a fresh DB (the main schema **and** the
+   Asterisk PJSIP realtime schema are mounted into Postgres init). Upgrading an
+   **existing** DB? Apply the deltas:
    ```bash
-   make seed     # creates admin@pbx.example.com, demo extensions 1001/1002, a demo AI agent
+   make migrate                                   # main schema
+   make realtime                                  # Asterisk ps_* realtime tables
+   docker compose exec -T postgres psql -U aipbx -d aipbx < db/migrations/002_departments_rbac.sql
    ```
-3. **Set a real admin password** (the seed hash is a placeholder). In a psql
-   shell (`make db-shell`), set a known argon2 hash, or use the API once you can
-   log in. Also promote your admin to the platform superadmin if you'll manage
-   multiple tenants:
-   ```sql
-   UPDATE users SET role = 'superadmin' WHERE email = 'admin@pbx.example.com';
+2. **Admin login already works** — use the `admin_email`/`admin_password` you set
+   (Terraform) or `BOOTSTRAP_ADMIN_*` (manual). The bootstrap creates a platform
+   **superadmin**, so multi-tenant management is enabled out of the box. To add
+   or reset one later:
+   ```bash
+   make create-admin EMAIL=admin@example.com PASSWORD='StrongPass!'
    ```
-4. **Health check:** `bash deploy/scripts/healthcheck.sh` (or `--json`).
+   *(Optional)* `make seed` adds demo extensions + a demo AI agent if you want
+   sample data to explore.
+3. **Health check:** `bash deploy/scripts/healthcheck.sh` (or `--json`).
+4. **Verify realtime is connected** (so API-created endpoints register):
+   ```bash
+   docker compose exec -T asterisk asterisk -rx "odbc show"          # DSN 'asterisk' connected
+   docker compose exec -T asterisk asterisk -rx "pjsip show endpoints"
+   ```
 5. **Log in** at `https://pbx.<domain>`, then:
    - **Trunks → Connect Twilio** (or add a SIP trunk) — see `INTEGRATIONS.md`.
-   - Create extensions; register softphones at `pbx.<domain>:5060` or use the
-     built-in browser softphone.
-   - Point your DID at an extension/IVR/AI agent under **Routing**.
+   - Create extensions — they provision into Asterisk **live**; register a
+     softphone at `pbx.<domain>:5060` (TLS 5061 / WSS 8089) or use the browser
+     softphone. Confirm with `pjsip show endpoints` that your new extension appears.
+   - Point your DID at an extension/IVR/queue/AI agent under **Routing**.
 
 ---
 
@@ -193,6 +210,8 @@ restores. Schedule via cron. Recordings already live in Spaces (durable).
 | No TLS cert | Rerun `DOMAIN=pbx.<d> EMAIL=<e> bash deploy/scripts/init-letsencrypt.sh`; confirm `pbx.<domain>` resolves to the droplet first (`dig +short pbx.<domain>`) and 80 is open for the ACME challenge |
 | `terraform apply` DNS error | Domain nameservers aren't pointed at DigitalOcean (see DNS note in step 2) |
 | Softphone won't register | Open 5060/udp + 10000–10200/udp; verify `PUBLIC_IP` in `.env` equals the reserved IP; `docker compose exec asterisk asterisk -rx 'pjsip show endpoints'` |
+| API-created extension doesn't appear in `pjsip show endpoints` | Realtime/ODBC not connected: `docker compose exec asterisk asterisk -rx 'odbc show'` should show DSN `asterisk` connected; confirm `db/asterisk_realtime.sql` was applied (`\dt ps_*` in `make db-shell`) and the Asterisk container can reach `postgres` |
+| Can't log in | Confirm `BOOTSTRAP_ADMIN_*` (or Terraform `admin_*`) were set; otherwise `make create-admin EMAIL=.. PASSWORD=..`; check `docker compose logs api` for the "superadmin created/updated" line |
 | AI agent silent | `docker compose logs ai-engine`; confirm `ANTHROPIC_API_KEY` + STT/TTS keys are set |
 
 See `docs/OPERATIONS.md` for scaling, monitoring, and the full runbook, and
