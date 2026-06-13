@@ -63,6 +63,11 @@ variable "subdomain" {
   default     = "pbx"
 }
 
+variable "acme_email" {
+  description = "Contact email for Let's Encrypt registration / expiry notices."
+  type        = string
+}
+
 # ----------------------------------------------------------------------------
 # SSH access
 # ----------------------------------------------------------------------------

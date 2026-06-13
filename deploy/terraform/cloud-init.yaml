@@ -34,7 +34,7 @@ write_files:
       # Re-deploy via: cd /opt/aipbx && terraform taint ... && terraform apply
 
       NODE_ENV=production
-      DOMAIN=${domain}
+      DOMAIN=${fqdn}
       PUBLIC_IP=${public_ip}
       TZ=UTC
 
@@ -55,7 +55,7 @@ write_files:
       JWT_REFRESH_SECRET=${jwt_refresh_secret}
       JWT_ACCESS_TTL=900
       JWT_REFRESH_TTL=2592000
-      CORS_ORIGINS=https://${domain}
+      CORS_ORIGINS=https://${fqdn}
       ENCRYPTION_KEY=${encryption_key}
 
       ARI_URL=http://asterisk:8088
@@ -101,9 +101,9 @@ write_files:
       SMTP_FROM=${smtp_from}
 
       WEB_PORT=80
-      VITE_API_URL=https://${domain}/api
-      VITE_WS_URL=wss://${domain}/ws
-      VITE_SIP_WSS_URL=wss://${domain}:8089/ws
+      VITE_API_URL=https://${fqdn}/api
+      VITE_WS_URL=wss://${fqdn}/ws
+      VITE_SIP_WSS_URL=wss://${fqdn}:8089/ws
 
   # --------------------------------------------------------------------------
   # UFW application profile for the PBX
@@ -201,8 +201,8 @@ runcmd:
   #    The init-letsencrypt.sh script handles staging/production toggle.
   # --------------------------------------------------------------------------
   - sleep 30
-  - bash /opt/aipbx/deploy/scripts/init-letsencrypt.sh
+  - DOMAIN=${fqdn} EMAIL=${acme_email} bash /opt/aipbx/deploy/scripts/init-letsencrypt.sh
 
 final_message: |
-  AIpbx cloud-init complete. Stack is running at https://${domain}
+  AIpbx cloud-init complete. Stack is running at https://${fqdn}
   Check logs: cd /opt/aipbx && docker compose logs -f

@@ -17,6 +17,9 @@ droplet_size = "s-4vcpu-8gb"
 domain    = "example.com"
 subdomain = "pbx"
 
+# Contact email for Let's Encrypt TLS certificates
+acme_email = "ops@example.com"
+
 # SSH — find with: doctl compute ssh-key list
 ssh_key_fingerprint = "aa:bb:cc:dd:..."
 

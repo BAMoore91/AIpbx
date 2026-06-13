@@ -113,11 +113,12 @@ make seed                # default admin + demo extensions
 
 ```bash
 cd deploy/terraform
-cp terraform.tfvars.example terraform.tfvars   # droplet size, region, domain, DO token
-terraform init && terraform apply              # provisions droplet, Spaces, firewall, DNS
+cp terraform.tfvars.example terraform.tfvars   # droplet size, region, domain, acme_email, DO token, secrets
+terraform init && terraform apply              # provisions droplet, Spaces, firewall, DNS, reserved IP
 ```
 The droplet's cloud-init clones the repo, writes `.env`, runs `docker compose up`,
-and obtains Let's Encrypt certificates. See `deploy/README.md`.
+and obtains Let's Encrypt certificates. **Full step-by-step (Terraform + manual
+paths, post-deploy, ports, troubleshooting): [`docs/DEPLOY_DIGITALOCEAN.md`](docs/DEPLOY_DIGITALOCEAN.md).**
 
 ---
 
@@ -133,6 +134,7 @@ for the lowest voice latency.
 - `docs/MULTI_TENANCY.md` — tenant model, isolation, plan limits, superadmin ops
 - `docs/ACCESS_ROLES.md` — per-department RBAC, customizable role matrix (3CX-style)
 - `docs/INTEGRATIONS.md` — carrier integrations (automatic Twilio SIP trunking)
+- `docs/DEPLOY_DIGITALOCEAN.md` — step-by-step DigitalOcean deployment
 - `docs/OPERATIONS.md` — runbook, scaling, backups
 
 ## License

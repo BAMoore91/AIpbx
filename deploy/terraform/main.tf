@@ -9,6 +9,8 @@ locals {
   # Cloud-init template variables — must match cloud-init.yaml templatefile vars exactly
   cloud_init_vars = {
     domain             = var.domain
+    fqdn               = local.fqdn
+    acme_email         = var.acme_email
     public_ip          = digitalocean_reserved_ip.aipbx.ip_address
     postgres_password  = var.postgres_password
     redis_password     = var.redis_password
