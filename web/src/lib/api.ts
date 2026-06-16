@@ -107,6 +107,16 @@ export const authApi = {
     api.post<{ accessToken: string }>('/auth/refresh', { refreshToken }).then((r) => r.data),
   me: () => api.get<User>('/auth/me').then((r) => r.data),
   logout: () => api.post('/auth/logout').catch(() => null),
+  updateProfile: (body: { first_name?: string; last_name?: string; avatar_url?: string | null }) =>
+    api.patch<User>('/auth/me', body).then((r) => r.data),
+  changePassword: (current_password: string, new_password: string) =>
+    api.post<{ ok: boolean }>('/auth/change-password', { current_password, new_password }).then((r) => r.data),
+  mfaSetup: () =>
+    api.post<{ secret: string; otpauth_url: string }>('/auth/mfa/setup').then((r) => r.data),
+  mfaEnable: (code: string) =>
+    api.post<{ ok: boolean; mfa_enabled: boolean }>('/auth/mfa/enable', { code }).then((r) => r.data),
+  mfaDisable: (password: string) =>
+    api.post<{ ok: boolean; mfa_enabled: boolean }>('/auth/mfa/disable', { password }).then((r) => r.data),
 };
 
 // ─── Generic CRUD factory ─────────────────────────────────────────────────────

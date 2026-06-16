@@ -92,6 +92,10 @@ class CallSession:
         self._cancel_speech = asyncio.Event()  # set to interrupt playback + LLM
         self._bargein_run = 0
         self._llm_task: Optional[asyncio.Task] = None
+        # The full turn (KB + LLM + TTS) runs as its own background task so the
+        # STT reader callback never blocks on it (otherwise barge-in dies and the
+        # provider WS receive buffer backs up while the agent speaks).
+        self._turn_task: Optional[asyncio.Task] = None
 
         # Turn handling: a final utterance triggers the LLM. We serialize turns.
         self._turn_lock = asyncio.Lock()
@@ -113,18 +117,19 @@ class CallSession:
     async def run(self) -> None:
         """Top-level: greet, then pump audio until terminate/hangup."""
         self.registry.attach_session(self.call_uuid, self)
-        await self.registry.mark_active(self.call_uuid)
-        self._db_call_id = await self.db.upsert_call_started(
-            self.call_uuid, self.agent.tenant_id, self.agent.id, self.channel_id
-        )
-
-        await self.stt.start()
-
-        # Greeting first so the caller hears the agent immediately.
-        greeting = self.agent.greeting or "Hello, how can I help you today?"
-        await self._speak(greeting, record_turn=True, role="assistant")
-
+        # Teardown wraps EVERYTHING after attach — if STT start / greeting / DB
+        # raise, we still release the STT socket and detach from the registry.
         try:
+            await self.registry.mark_active(self.call_uuid)
+            self._db_call_id = await self.db.upsert_call_started(
+                self.call_uuid, self.agent.tenant_id, self.agent.id, self.channel_id
+            )
+            await self.stt.start()
+
+            # Greeting first so the caller hears the agent immediately.
+            greeting = self.agent.greeting or "Hello, how can I help you today?"
+            await self._speak(greeting, record_turn=True, role="assistant")
+
             await self._audio_loop()
         finally:
             await self._teardown()
@@ -151,12 +156,13 @@ class CallSession:
     async def _teardown(self) -> None:
         self._ended.set()
         self._cancel_speech.set()
-        if self._llm_task and not self._llm_task.done():
-            self._llm_task.cancel()
-            try:
-                await self._llm_task
-            except (asyncio.CancelledError, Exception):  # noqa: BLE001
-                pass
+        for task in (self._turn_task, self._llm_task):
+            if task and not task.done():
+                task.cancel()
+                try:
+                    await task
+                except (asyncio.CancelledError, Exception):  # noqa: BLE001
+                    pass
         try:
             await self.stt.finish()
         except Exception:  # noqa: BLE001
@@ -217,15 +223,27 @@ class CallSession:
         if not text:
             return
 
-        # End-keyword check (caller said "goodbye"): finish gracefully.
-        if self._matches_end_keyword(text):
-            self.transcript_turns.append(self._turn("user", text))
-            self.messages.append({"role": "user", "content": text})
-            await self._speak("Thanks for calling. Goodbye!", role="assistant")
-            await self._request_hangup()
-            return
+        # Dispatch the turn as a background task — do NOT await it here. This
+        # callback runs inside the STT provider's read loop; blocking it would
+        # stop us draining the socket (no more interim transcripts → no barge-in)
+        # for the entire LLM+TTS turn. End-keyword handling lives in the turn.
+        self._schedule_turn(text)
 
-        await self.on_user_utterance(text)
+    def _schedule_turn(self, text: str) -> None:
+        """Start (or replace) the turn task for a final utterance."""
+        prev = self._turn_task
+        if prev and not prev.done():
+            # A new complete utterance supersedes an in-flight turn.
+            prev.cancel()
+        self._turn_task = asyncio.create_task(self._guarded_turn(text))
+
+    async def _guarded_turn(self, text: str) -> None:
+        try:
+            await self.on_user_utterance(text)
+        except asyncio.CancelledError:
+            logger.debug("[%s] turn superseded/cancelled", self.call_uuid)
+        except Exception:  # noqa: BLE001
+            logger.exception("[%s] turn failed", self.call_uuid)
 
     def _matches_end_keyword(self, text: str) -> bool:
         low = text.lower()
@@ -236,6 +254,15 @@ class CallSession:
         async with self._turn_lock:
             if self._ended.is_set() or self._hangup_requested:
                 return
+
+            # End-keyword check (caller said "goodbye"): finish gracefully.
+            if self._matches_end_keyword(text):
+                self.transcript_turns.append(self._turn("user", text))
+                self.messages.append({"role": "user", "content": text})
+                await self._speak("Thanks for calling. Goodbye!", role="assistant")
+                await self._request_hangup()
+                return
+
             self.turn_count += 1
             self.transcript_turns.append(self._turn("user", text))
             self.messages.append({"role": "user", "content": text})

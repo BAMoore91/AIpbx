@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { Settings as SettingsIcon, Plus, Trash2, Globe, User, Webhook as WebhookIcon, Shield } from 'lucide-react';
 import { webhooksApi, authApi } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
-import { Input, Textarea, Toggle } from '@/components/FormFields';
+import { Input, Textarea } from '@/components/FormFields';
 import { Modal } from '@/components/Modal';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Badge } from '@/components/Badge';
@@ -45,8 +45,11 @@ function ProfileTab() {
 
   const save = async (data: ProfileForm) => {
     try {
-      const updated = await authApi.me(); // Re-fetch after hypothetical update
-      setUser({ ...updated, ...data });
+      const updated = await authApi.updateProfile({
+        first_name: data.first_name,
+        last_name: data.last_name,
+      });
+      setUser(updated);
       toast.success('Profile updated');
     } catch {
       toast.error('Failed to update profile');
@@ -71,7 +74,7 @@ function ProfileTab() {
           <Input label="First Name" error={errors.first_name?.message} {...register('first_name')} />
           <Input label="Last Name" error={errors.last_name?.message} {...register('last_name')} />
         </div>
-        <Input label="Email" type="email" error={errors.email?.message} {...register('email')} />
+        <Input label="Email" type="email" disabled hint="Contact an admin to change your email" {...register('email')} />
         <button type="submit" className="btn-primary">Save Profile</button>
       </form>
     </div>
@@ -169,31 +172,106 @@ function WebhooksTab() {
 }
 
 function SecurityTab() {
-  const { user } = useAuthStore();
+  const { user, setUser } = useAuthStore();
   const [mfaEnabled, setMfaEnabled] = useState(user?.mfa_enabled ?? false);
+  const [enroll, setEnroll] = useState<{ secret: string; otpauth_url: string } | null>(null);
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  // Password change
+  const [cur, setCur] = useState('');
+  const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
+
+  const startMfa = async () => {
+    try {
+      setEnroll(await authApi.mfaSetup());
+    } catch {
+      toast.error('Could not start MFA setup');
+    }
+  };
+
+  const confirmMfa = async () => {
+    setBusy(true);
+    try {
+      const res = await authApi.mfaEnable(code.trim());
+      setMfaEnabled(res.mfa_enabled);
+      setEnroll(null);
+      setCode('');
+      if (user) setUser({ ...user, mfa_enabled: true });
+      toast.success('MFA enabled');
+    } catch {
+      toast.error('Invalid code');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const disableMfa = async () => {
+    const pw = window.prompt('Enter your password to disable MFA');
+    if (!pw) return;
+    try {
+      await authApi.mfaDisable(pw);
+      setMfaEnabled(false);
+      if (user) setUser({ ...user, mfa_enabled: false });
+      toast.success('MFA disabled');
+    } catch {
+      toast.error('Could not disable MFA (wrong password?)');
+    }
+  };
+
+  const changePassword = async () => {
+    if (next.length < 8) return toast.error('New password must be at least 8 characters');
+    if (next !== confirm) return toast.error('New passwords do not match');
+    setBusy(true);
+    try {
+      await authApi.changePassword(cur, next);
+      setCur(''); setNext(''); setConfirm('');
+      toast.success('Password changed — other sessions were signed out');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.error?.message ?? 'Could not change password');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <div className="max-w-lg space-y-4">
       <div className="card p-4 space-y-3">
         <h3 className="text-sm font-semibold text-surface-800 dark:text-surface-200">Two-Factor Authentication</h3>
-        <Toggle
-          label="MFA Enabled"
-          description="Require a one-time code on every login"
-          checked={mfaEnabled}
-          onChange={(v) => {
-            setMfaEnabled(v);
-            toast(v ? 'MFA setup flow not yet wired to this demo — check API docs.' : 'MFA disabled.');
-          }}
-        />
+        {mfaEnabled ? (
+          <div className="flex items-center justify-between">
+            <Badge variant="success">Enabled</Badge>
+            <button className="btn-secondary btn-sm" onClick={disableMfa}>Disable MFA</button>
+          </div>
+        ) : enroll ? (
+          <div className="space-y-3">
+            <p className="text-sm text-surface-500">
+              Add this secret to your authenticator app, then enter the 6-digit code to confirm.
+            </p>
+            <code className="block break-all rounded bg-surface-100 dark:bg-surface-800 p-2 text-xs">{enroll.secret}</code>
+            <a className="text-xs text-primary-500 break-all" href={enroll.otpauth_url}>{enroll.otpauth_url}</a>
+            <Input label="6-digit code" value={code} onChange={(e) => setCode(e.target.value)} maxLength={6} />
+            <div className="flex gap-2">
+              <button className="btn-primary btn-sm" onClick={confirmMfa} disabled={busy || code.length !== 6}>Confirm &amp; enable</button>
+              <button className="btn-secondary btn-sm" onClick={() => { setEnroll(null); setCode(''); }}>Cancel</button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-surface-500">Require a one-time code at login.</p>
+            <button className="btn-primary btn-sm" onClick={startMfa}>Set up MFA</button>
+          </div>
+        )}
       </div>
 
       <div className="card p-4 space-y-3">
         <h3 className="text-sm font-semibold text-surface-800 dark:text-surface-200">Change Password</h3>
         <div className="space-y-3">
-          <Input label="Current Password" type="password" />
-          <Input label="New Password" type="password" />
-          <Input label="Confirm New Password" type="password" />
-          <button className="btn-primary btn-sm" onClick={() => toast('Password change requires API integration.')}>
+          <Input label="Current Password" type="password" autoComplete="current-password" value={cur} onChange={(e) => setCur(e.target.value)} />
+          <Input label="New Password" type="password" autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} />
+          <Input label="Confirm New Password" type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+          <button className="btn-primary btn-sm" onClick={changePassword} disabled={busy || !cur || !next}>
             Update Password
           </button>
         </div>

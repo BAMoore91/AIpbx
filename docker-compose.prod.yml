@@ -1,0 +1,43 @@
+# ============================================================================
+# AIpbx — production compose overlay
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Adds resource limits and the production telephony networking mode. Keep the
+# base docker-compose.yml for local development (bridge networking).
+# ============================================================================
+services:
+  postgres:
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+    mem_limit: 1g
+
+  redis:
+    mem_limit: 256m
+
+  api:
+    mem_limit: 512m
+
+  ai-engine:
+    mem_limit: 1g
+
+  # --------------------------------------------------------------------------
+  # Asterisk on HOST networking — the production-correct mode for SIP/RTP NAT.
+  #
+  # The Docker bridge + userland proxy rewrites RTP source ports and hides the
+  # real client IP, which defeats symmetric-RTP/NAT handling and adds per-packet
+  # overhead on the 200-port media range. Host networking avoids all of that.
+  #
+  # TRADE-OFF: a host-networked container is NOT on the `aipbx` bridge, so the
+  # `api` service can no longer reach it as `http://asterisk:8088`. When you
+  # enable this you MUST also point the API at the host:
+  #     ARI_URL=http://<droplet-private-ip>:8088   (in .env, for the api service)
+  # and ensure the AI engine's AudioSocket is reachable from the host — either
+  # publish ai-engine 9092 to the host or also host-network it.
+  #
+  # Uncomment to enable:
+  # asterisk:
+  #   network_mode: host
+  #   ports: !reset []        # host networking publishes nothing via the proxy
+  #   mem_limit: 1g

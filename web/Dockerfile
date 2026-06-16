@@ -7,14 +7,22 @@ WORKDIR /app
 ARG VITE_API_URL
 ARG VITE_WS_URL
 ARG VITE_SIP_WSS_URL
+ARG VITE_STUN_URL
+ARG VITE_TURN_URL
+ARG VITE_TURN_USERNAME
+ARG VITE_TURN_CREDENTIAL
 
 ENV VITE_API_URL=$VITE_API_URL
 ENV VITE_WS_URL=$VITE_WS_URL
 ENV VITE_SIP_WSS_URL=$VITE_SIP_WSS_URL
+ENV VITE_STUN_URL=$VITE_STUN_URL
+ENV VITE_TURN_URL=$VITE_TURN_URL
+ENV VITE_TURN_USERNAME=$VITE_TURN_USERNAME
+ENV VITE_TURN_CREDENTIAL=$VITE_TURN_CREDENTIAL
 
-# Install deps
-COPY package.json ./
-RUN npm install --frozen-lockfile 2>/dev/null || npm install
+# Install deps from the lockfile (reproducible; fails if lock is out of sync).
+COPY package.json package-lock.json ./
+RUN npm ci
 
 # Build
 COPY . .

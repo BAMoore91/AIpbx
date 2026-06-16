@@ -8,6 +8,27 @@ if (import.meta.env.PROD) {
   JsSIP.debug.disable('JsSIP:*');
 }
 
+/**
+ * ICE servers: STUN plus an optional TURN relay (required for callers behind
+ * symmetric NAT, common on corporate networks). Configure via build-time env:
+ *   VITE_TURN_URL=turn:turn.example.com:3478
+ *   VITE_TURN_USERNAME / VITE_TURN_CREDENTIAL
+ */
+function iceServers(): RTCIceServer[] {
+  const servers: RTCIceServer[] = [
+    { urls: import.meta.env.VITE_STUN_URL ?? 'stun:stun.l.google.com:19302' },
+  ];
+  const turnUrl = import.meta.env.VITE_TURN_URL;
+  if (turnUrl) {
+    servers.push({
+      urls: turnUrl,
+      username: import.meta.env.VITE_TURN_USERNAME,
+      credential: import.meta.env.VITE_TURN_CREDENTIAL,
+    });
+  }
+  return servers;
+}
+
 let ua: JsSIP.UA | null = null;
 let activeSession: RTCSession | null = null;
 let remoteAudio: HTMLAudioElement | null = null;
@@ -98,7 +119,7 @@ export function placeCall(target: string, extension: Extension) {
     mediaConstraints: { audio: true, video: false },
     rtcOfferConstraints: { offerToReceiveAudio: true, offerToReceiveVideo: false },
     pcConfig: {
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+      iceServers: iceServers(),
     },
   }) as RTCSession;
 
@@ -145,7 +166,7 @@ export function answerCall() {
   activeSession.answer({
     mediaConstraints: { audio: true, video: false },
     pcConfig: {
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+      iceServers: iceServers(),
     },
   });
 

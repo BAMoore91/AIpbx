@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto';
+import { createHmac, randomBytes } from 'node:crypto';
 
 /**
  * Minimal TOTP (RFC 6238) verifier — used as the optional MFA second factor.
@@ -10,6 +10,34 @@ import { createHmac } from 'node:crypto';
  */
 
 const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+
+function base32Encode(buf: Buffer): string {
+  let bits = 0;
+  let value = 0;
+  let out = '';
+  for (const byte of buf) {
+    value = (value << 8) | byte;
+    bits += 8;
+    while (bits >= 5) {
+      out += BASE32_ALPHABET[(value >>> (bits - 5)) & 31];
+      bits -= 5;
+    }
+  }
+  if (bits > 0) out += BASE32_ALPHABET[(value << (5 - bits)) & 31];
+  return out;
+}
+
+/** Generate a new base32 TOTP secret (160 bits) for enrollment. */
+export function generateTotpSecret(): string {
+  return base32Encode(randomBytes(20));
+}
+
+/** Build the otpauth:// provisioning URI for an authenticator-app QR code. */
+export function otpauthUrl(secret: string, account: string, issuer = 'AIpbx'): string {
+  const label = encodeURIComponent(`${issuer}:${account}`);
+  const params = new URLSearchParams({ secret, issuer, algorithm: 'SHA1', digits: '6', period: '30' });
+  return `otpauth://totp/${label}?${params.toString()}`;
+}
 
 function base32Decode(input: string): Buffer {
   const clean = input.replace(/=+$/, '').toUpperCase().replace(/\s+/g, '');
