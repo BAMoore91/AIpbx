@@ -135,6 +135,7 @@ for the lowest voice latency.
 - `docs/ACCESS_ROLES.md` — per-department RBAC, customizable role matrix (3CX-style)
 - `docs/INTEGRATIONS.md` — carrier integrations (automatic Twilio SIP trunking)
 - `docs/DEPLOY_DIGITALOCEAN.md` — step-by-step DigitalOcean deployment
+- `docs/INSTALL_FROM_DROPLET.md` — install on an already-running droplet
 - `docs/HANDOFF_CLAUDE_CHROME.md` — browser-only deploy runbook for Claude for Chrome
 - `docs/OPERATIONS.md` — runbook, scaling, backups
 
