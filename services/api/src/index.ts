@@ -8,6 +8,7 @@ import { AriController } from './ari/controller.js';
 import { EventBus } from './events.js';
 import { WsHub } from './ws/hub.js';
 import { bootstrapAdminFromEnv } from './bootstrap.js';
+import { RetentionSweeper } from './services/retention.js';
 
 /**
  * Service entrypoint. Boots config → datastores → context → ARI → HTTP+WS, then
@@ -42,6 +43,10 @@ async function main(): Promise<void> {
   wsHub.startRedisBridge();
   logger.info({ port: config.apiPort }, 'AIpbx API listening (HTTP + /ws)');
 
+  // Daily data-retention sweep (90-day default; per-tenant override).
+  const retention = new RetentionSweeper(ctx.s3, config.retention);
+  retention.start();
+
   // Graceful shutdown.
   let shuttingDown = false;
   const shutdown = async (signal: string): Promise<void> => {
@@ -49,6 +54,7 @@ async function main(): Promise<void> {
     shuttingDown = true;
     logger.info({ signal }, 'shutting down');
     try {
+      retention.stop();
       wsHub.close();
       await ari.stop();
       await app.close();

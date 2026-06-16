@@ -83,6 +83,7 @@ export default function Tenants() {
         max_extensions: t.max_extensions,
         max_concurrent_calls: t.max_concurrent_calls,
         domain: t.domain,
+        settings: t.settings,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['tenants'] });
@@ -227,6 +228,21 @@ export default function Tenants() {
               label="SIP Domain"
               value={editing.domain ?? ''}
               onChange={(e) => setEditing({ ...editing, domain: e.target.value || null })}
+            />
+            <Input
+              label="Data retention (days)"
+              type="number"
+              hint="Calls, recordings, transcripts & logs older than this are purged. Blank = platform default (90)."
+              value={editing.settings?.retention_days ?? ''}
+              onChange={(e) =>
+                setEditing({
+                  ...editing,
+                  settings: {
+                    ...(editing.settings ?? {}),
+                    retention_days: e.target.value ? Number(e.target.value) : undefined,
+                  },
+                })
+              }
             />
             <div className="flex justify-end gap-2 pt-2">
               <button className="btn-secondary" onClick={() => setEditing(null)}>Cancel</button>

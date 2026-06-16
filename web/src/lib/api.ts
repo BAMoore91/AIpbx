@@ -171,6 +171,7 @@ export interface Tenant {
   max_extensions: number;
   max_concurrent_calls: number;
   is_active: boolean;
+  settings?: Record<string, unknown> & { retention_days?: number };
   created_at: string;
   updated_at: string;
   usage?: TenantUsage;

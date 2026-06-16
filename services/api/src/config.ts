@@ -47,6 +47,14 @@ const ConfigSchema = z.object({
   aiEngineUrl: z.string().default('http://ai-engine:8080'),
   internalApiKey: z.string().optional(),
 
+  // Data retention: rows (and their S3 objects) older than this are purged by a
+  // daily sweep. Per-tenant override via tenants.settings.retention_days.
+  retention: z.object({
+    enabled: z.boolean().default(true),
+    days: z.coerce.number().int().min(1).max(3650).default(90),
+    intervalHours: z.coerce.number().int().min(1).max(168).default(24),
+  }),
+
   s3: z.object({
     endpoint: z.string().optional(),
     region: z.string().default('us-east-1'),
@@ -97,7 +105,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       enabled: env.ARI_ENABLED !== 'false',
     },
     aiEngineUrl: env.AI_ENGINE_URL,
-  internalApiKey: env.INTERNAL_API_KEY,
+    internalApiKey: env.INTERNAL_API_KEY,
+    retention: {
+      enabled: env.RETENTION_ENABLED !== 'false',
+      days: env.RETENTION_DAYS,
+      intervalHours: env.RETENTION_INTERVAL_HOURS,
+    },
     s3: {
       endpoint: env.S3_ENDPOINT,
       region: env.S3_REGION,
