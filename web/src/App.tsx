@@ -10,6 +10,7 @@ import { Sidebar } from './components/Sidebar';
 import { Topbar } from './components/Topbar';
 import { SoftphoneWidget } from './softphone/SoftphoneWidget';
 import { IncomingCallPopup } from './softphone/IncomingCallPopup';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import type { WSEvent, LiveCall, QueueStats } from './lib/types';
 
 // ─── Lazy page imports ────────────────────────────────────────────────────────
@@ -113,6 +114,7 @@ function AppLayout() {
           onDarkModeToggle={() => setDarkMode(!darkMode)}
         />
         <main className="flex-1 overflow-y-auto bg-surface-50 dark:bg-surface-950 p-6">
+          <ErrorBoundary>
           <Suspense fallback={<PageLoader />}>
             <Routes>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -140,6 +142,7 @@ function AppLayout() {
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
           </Suspense>
+          </ErrorBoundary>
         </main>
       </div>
 

@@ -69,9 +69,13 @@ export async function callRoutes(app: FastifyInstance): Promise<void> {
     const { id } = request.params as { id: string };
     const row = await queryOne(`SELECT * FROM calls WHERE tenant_id = $1 AND id = $2`, [auth.tenantId, id]);
     if (!row) throw notFound('Call not found');
-    // Attach recording + transcript references if present.
-    const recordings = await query(`SELECT * FROM recordings WHERE call_id = $1`, [id]);
-    const transcript = await queryOne(`SELECT * FROM transcripts WHERE call_id = $1 ORDER BY created_at DESC LIMIT 1`, [id]);
+    // Attach recording + transcript references if present (tenant-scoped).
+    const recordings = await query(`SELECT * FROM recordings WHERE call_id = $1 AND tenant_id = $2`, [id, auth.tenantId]);
+    const transcript = await queryOne(
+      `SELECT t.* FROM transcripts t JOIN calls c ON c.id = t.call_id
+       WHERE t.call_id = $1 AND c.tenant_id = $2 ORDER BY t.created_at DESC LIMIT 1`,
+      [id, auth.tenantId],
+    );
     return reply.send({ ...row, recordings: recordings.rows, transcript });
   });
 }

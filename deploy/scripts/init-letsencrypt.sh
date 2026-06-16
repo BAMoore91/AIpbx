@@ -124,9 +124,12 @@ copy_cert_to_asterisk() {
             set -e
             LIVE=/etc/letsencrypt/live/${DOMAIN}
             KEYS=/etc/asterisk/keys
-            cp \"\${LIVE}/fullchain.pem\" \"\${KEYS}/fullchain.pem\"
-            cp \"\${LIVE}/privkey.pem\"   \"\${KEYS}/privkey.pem\"
-            chmod 640 \"\${KEYS}/fullchain.pem\" \"\${KEYS}/privkey.pem\"
+            # Install under the exact filenames http.conf/pjsip.conf reference
+            # (asterisk.crt/asterisk.key) so WebRTC WSS (8089) and SIP-TLS (5061)
+            # present the real LE cert instead of the self-signed fallback.
+            cp \"\${LIVE}/fullchain.pem\" \"\${KEYS}/asterisk.crt\"
+            cp \"\${LIVE}/privkey.pem\"   \"\${KEYS}/asterisk.key\"
+            chmod 640 \"\${KEYS}/asterisk.crt\" \"\${KEYS}/asterisk.key\"
             echo 'Certificates copied to Asterisk keys volume'
         " || log "WARN: Could not copy cert to Asterisk keys volume (Asterisk may not be running yet)"
 

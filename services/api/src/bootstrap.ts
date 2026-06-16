@@ -13,14 +13,18 @@ export interface BootstrapAdminInput {
 }
 
 /**
- * Create (or repair) a platform superadmin so the console is usable on first
- * deploy. Idempotent:
+ * Create a platform superadmin so the console is usable on first deploy.
  *   - ensures the default tenant exists,
- *   - if the user exists, promotes to superadmin + resets the password,
+ *   - if the user exists: when `reset` is true (CLI), reset password + ensure
+ *     superadmin/active; when false (startup bootstrap), leave it UNCHANGED so a
+ *     rotated password / deliberate deactivation isn't clobbered on every boot,
  *   - otherwise creates the superadmin.
  * Returns the user id, or null on failure (logged).
  */
-export async function createSuperadmin(input: BootstrapAdminInput): Promise<string | null> {
+export async function createSuperadmin(
+  input: BootstrapAdminInput,
+  opts: { reset?: boolean } = {},
+): Promise<string | null> {
   const tenantId = input.tenantId ?? DEFAULT_TENANT_ID;
   const email = input.email.trim().toLowerCase();
   try {
@@ -36,12 +40,16 @@ export async function createSuperadmin(input: BootstrapAdminInput): Promise<stri
       [tenantId, email],
     );
     if (existing) {
-      await query(
-        `UPDATE users SET password_hash = $1, role = 'superadmin', is_active = true, updated_at = now()
-         WHERE id = $2`,
-        [hash, existing.id],
-      );
-      logger.info({ email, userId: existing.id }, 'superadmin updated (password reset, role ensured)');
+      if (opts.reset) {
+        await query(
+          `UPDATE users SET password_hash = $1, role = 'superadmin', is_active = true, updated_at = now()
+           WHERE id = $2`,
+          [hash, existing.id],
+        );
+        logger.info({ email, userId: existing.id }, 'superadmin reset (password + role)');
+      } else {
+        logger.info({ email, userId: existing.id }, 'superadmin already exists; left unchanged');
+      }
       return existing.id;
     }
     const row = await queryOne<{ id: string }>(

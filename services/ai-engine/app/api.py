@@ -14,11 +14,23 @@ from __future__ import annotations
 import logging
 from typing import Any, Optional
 
-from fastapi import APIRouter, FastAPI, HTTPException, Request
+from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from .config import get_settings
 from .engine import Engine
 from .registry import CallRegistration
+
+
+def require_internal_key(x_internal_key: str | None = Header(default=None)) -> None:
+    """Guard mutating control routes with a shared secret when configured.
+
+    No-op when INTERNAL_API_KEY is unset (dev). The engine also has no published
+    ports, so this is defense-in-depth against intra-network access.
+    """
+    expected = get_settings().internal_api_key
+    if expected and x_internal_key != expected:
+        raise HTTPException(status_code=401, detail="invalid or missing internal key")
 
 logger = logging.getLogger("aipbx.api")
 
@@ -56,7 +68,7 @@ async def healthz(request: Request) -> dict[str, Any]:
     }
 
 
-@router.post("/calls", status_code=202)
+@router.post("/calls", status_code=202, dependencies=[Depends(require_internal_key)])
 async def register_call(body: RegisterCall, request: Request) -> dict[str, Any]:
     """Register which agent handles the AudioSocket connection for a call_uuid."""
     engine = _engine(request)
@@ -94,7 +106,7 @@ async def call_status(call_uuid: str, request: Request) -> dict[str, Any]:
     }
 
 
-@router.post("/calls/{call_uuid}/summary")
+@router.post("/calls/{call_uuid}/summary", dependencies=[Depends(require_internal_key)])
 async def force_summary(call_uuid: str, request: Request) -> dict[str, Any]:
     engine = _engine(request)
     session = engine.registry.get_session(call_uuid)
@@ -103,7 +115,7 @@ async def force_summary(call_uuid: str, request: Request) -> dict[str, Any]:
     return await session.force_summary()  # type: ignore[attr-defined]
 
 
-@router.post("/calls/{call_uuid}/end", status_code=202)
+@router.post("/calls/{call_uuid}/end", status_code=202, dependencies=[Depends(require_internal_key)])
 async def end_call(call_uuid: str, request: Request) -> dict[str, Any]:
     """Externally end an AI call (called by the API on channel hangup).
 
@@ -120,7 +132,7 @@ async def end_call(call_uuid: str, request: Request) -> dict[str, Any]:
     return {"ended": True, "call_uuid": call_uuid, "had_session": False}
 
 
-@router.post("/agents/{agent_id}/test")
+@router.post("/agents/{agent_id}/test", dependencies=[Depends(require_internal_key)])
 async def test_agent(agent_id: str, body: TestChat, request: Request) -> dict[str, Any]:
     """Text-only chat test harness for the console agent builder.
 

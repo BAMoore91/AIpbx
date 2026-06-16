@@ -248,9 +248,34 @@ patch_nginx_config() {
 # -----------------------------------------------------------------------------
 # 5. Start/update the Docker Compose stack
 # -----------------------------------------------------------------------------
+# Seed a self-signed placeholder cert into the certbot volume so nginx's :443
+# server block can start on first boot (it references LE files that don't exist
+# until init-letsencrypt runs). init-letsencrypt later overwrites these. Without
+# this, nginx fails to start → the ACME HTTP-01 challenge can't be served →
+# deadlock. Idempotent: skips if a cert is already present.
+seed_bootstrap_cert() {
+    local vol="aipbx_certbot_certs"
+    log "Seeding self-signed placeholder cert for ${DOMAIN} (first-boot nginx)..."
+    docker volume create "${vol}" >/dev/null 2>&1 || true
+    docker run --rm -v "${vol}:/etc/letsencrypt" alpine:3.20 sh -c "
+        set -e
+        D=/etc/letsencrypt/live/${DOMAIN}
+        if [ -f \"\$D/fullchain.pem\" ]; then echo 'cert already present'; exit 0; fi
+        apk add --no-cache openssl >/dev/null
+        mkdir -p \"\$D\"
+        openssl req -x509 -newkey rsa:2048 -nodes -days 3 \
+          -keyout \"\$D/privkey.pem\" -out \"\$D/fullchain.pem\" \
+          -subj '/CN=${DOMAIN}' >/dev/null 2>&1
+        cp \"\$D/fullchain.pem\" \"\$D/chain.pem\"
+        echo 'placeholder cert written'
+    " || log "WARN: could not seed placeholder cert (nginx :443 may fail until init-letsencrypt runs)"
+}
+
 start_stack() {
     log "Starting AIpbx stack via Docker Compose..."
     cd "${DEPLOY_DIR}"
+
+    seed_bootstrap_cert
 
     # Pull latest images (non-fatal — custom builds still work)
     docker compose pull --quiet || true

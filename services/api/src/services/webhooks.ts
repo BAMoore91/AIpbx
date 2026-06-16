@@ -11,6 +11,9 @@ import type { WebhookRow } from '../types/db.js';
  * Delivery is best-effort fire-and-forget with a short timeout.
  */
 export class WebhookDispatcher {
+  /** `decryptSecret` recovers the HMAC secret stored encrypted at rest. */
+  constructor(private readonly decryptSecret?: (v: string) => string | null) {}
+
   /** Send an event to every active webhook in the tenant subscribed to it. */
   async dispatch(
     tenantId: string,
@@ -42,7 +45,9 @@ export class WebhookDispatcher {
       'x-aipbx-event': event,
     };
     if (hook.secret) {
-      const sig = createHmac('sha256', hook.secret).update(body).digest('hex');
+      // Stored encrypted at rest; fall back to the raw value for legacy rows.
+      const secret = this.decryptSecret?.(hook.secret) ?? hook.secret;
+      const sig = createHmac('sha256', secret).update(body).digest('hex');
       headers['x-aipbx-signature'] = `sha256=${sig}`;
     }
     const controller = new AbortController();

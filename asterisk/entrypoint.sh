@@ -35,6 +35,10 @@ export RTP_START="${RTP_START:-10000}"
 export RTP_END="${RTP_END:-10200}"
 export ARI_APP="${ARI_APP:-aipbx}"
 export PUBLIC_IP="${PUBLIC_IP:-127.0.0.1}"
+# SIP secret for the static demo endpoints (1001/1002). Defaults empty so they
+# simply can't register until set — never reuse ARI_PASSWORD. Real extensions
+# are provisioned via the API into PJSIP realtime with their own secrets.
+export SEED_SIP_PASSWORD="${SEED_SIP_PASSWORD:-}"
 
 # ---------------------------------------------------------------------------
 # 2. Validate required vars
@@ -70,6 +74,13 @@ if [[ -n "${DATABASE_URL}" ]]; then
     # PG_USER and PG_PASSWORD from userinfo (user:password)
     export PG_USER="${_userinfo%%:*}"
     export PG_PASSWORD="${_userinfo#*:}"
+
+    # URL-decode percent-encoded credentials. Generated DB passwords commonly
+    # contain @ : / % which MUST be percent-encoded in the URL; without decoding
+    # here the ODBC DSN auth fails and ALL PJSIP realtime lookups break silently.
+    urldecode() { local s="${1//+/ }"; printf '%b' "${s//%/\\x}"; }
+    export PG_USER="$(urldecode "${PG_USER}")"
+    export PG_PASSWORD="$(urldecode "${PG_PASSWORD}")"
 
     # host:port/db from hostinfo
     _hostport="${_hostinfo%%/*}"
@@ -166,7 +177,7 @@ done
 #    accidentally touched — we only substitute the env vars we own.
 # ---------------------------------------------------------------------------
 CONF_DIR="/etc/asterisk"
-OWN_VARS='$PUBLIC_IP $RTP_START $RTP_END $ARI_USERNAME $ARI_PASSWORD $ARI_APP $PG_USER $PG_PASSWORD $PG_HOST $PG_PORT $PG_DB'
+OWN_VARS='$PUBLIC_IP $RTP_START $RTP_END $ARI_USERNAME $ARI_PASSWORD $ARI_APP $SEED_SIP_PASSWORD $PG_USER $PG_PASSWORD $PG_HOST $PG_PORT $PG_DB'
 
 echo "[entrypoint] Applying envsubst to ${CONF_DIR}/*.conf ..."
 for tmpl in "${CONF_DIR}"/*.conf; do

@@ -9,13 +9,16 @@ export const userCreate = z.object({
   password: z.string().min(8),
   first_name: z.string().optional(),
   last_name: z.string().optional(),
-  role: z.enum(['superadmin', 'admin', 'supervisor', 'agent', 'user']).default('agent'),
+  // 'superadmin' is intentionally NOT assignable via the tenant user API — that
+  // would be cross-tenant privilege escalation. Superadmins are created only via
+  // the bootstrap/CLI (see bootstrap.ts).
+  role: z.enum(['admin', 'supervisor', 'agent', 'user']).default('agent'),
   is_active: z.boolean().default(true),
 });
 export const userUpdate = z.object({
   first_name: z.string().optional(),
   last_name: z.string().optional(),
-  role: z.enum(['superadmin', 'admin', 'supervisor', 'agent', 'user']).optional(),
+  role: z.enum(['admin', 'supervisor', 'agent', 'user']).optional(),
   is_active: z.boolean().optional(),
   avatar_url: z.string().url().optional(),
   password: z.string().min(8).optional(),

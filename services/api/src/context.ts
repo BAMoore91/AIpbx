@@ -39,8 +39,8 @@ export function buildContext(config: AppConfig): AppContext {
   const auth = new AuthService(jwt, (v) => crypto.tryDecrypt(v));
   const s3 = new S3Service(config.s3);
   const email = new EmailService(config.smtp);
-  const webhooks = new WebhookDispatcher();
-  const aiEngine = new AiEngineClient(config.aiEngineUrl);
+  const webhooks = new WebhookDispatcher((v) => crypto.tryDecrypt(v));
+  const aiEngine = new AiEngineClient(config.aiEngineUrl, config.internalApiKey);
 
   return { config, crypto, jwt, auth, s3, email, webhooks, aiEngine };
 }

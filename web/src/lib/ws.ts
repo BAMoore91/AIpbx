@@ -13,7 +13,7 @@ class WSClient {
   private url: string;
 
   constructor() {
-    this.url = import.meta.env.VITE_WS_URL ?? 'ws://localhost:8080/ws';
+    this.url = import.meta.env.VITE_WS_URL ?? 'wss://localhost:8080/ws';
   }
 
   connect() {

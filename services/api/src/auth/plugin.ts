@@ -41,7 +41,8 @@ async function authPluginImpl(app: FastifyInstance): Promise<void> {
     if (claims.role === 'superadmin') {
       const raw = request.headers['x-tenant-id'];
       const target = Array.isArray(raw) ? raw[0] : raw;
-      if (target && /^[0-9a-f-]{36}$/i.test(target) && target !== homeTenantId) {
+      const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (target && UUID_RE.test(target) && target !== homeTenantId) {
         tenantId = target;
         impersonating = true;
       }

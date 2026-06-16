@@ -26,10 +26,15 @@ export async function buildApp(
 
   app.decorate('ctx', ctx);
 
-  await app.register(cors, {
-    origin: ctx.config.corsOrigins.length ? ctx.config.corsOrigins : true,
-    credentials: true,
-  });
+  // CORS: explicit allowlist. Fail CLOSED in production when unset (never
+  // reflect arbitrary origins with credentials); permissive only in dev.
+  const corsOrigin =
+    ctx.config.corsOrigins.length > 0
+      ? ctx.config.corsOrigins
+      : ctx.config.nodeEnv === 'production'
+        ? false
+        : true;
+  await app.register(cors, { origin: corsOrigin, credentials: true });
   await app.register(authPlugin);
 
   // Health checks (unauthenticated).

@@ -21,8 +21,12 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - pgdata:/var/lib/postgresql/data
+      # Applied in lexicographic order on a FRESH volume. Migrations are mounted
+      # too (idempotent) so fresh installs match migrated existing DBs.
       - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
       - ./db/asterisk_realtime.sql:/docker-entrypoint-initdb.d/02-asterisk-realtime.sql:ro
+      - ./db/migrations/002_departments_rbac.sql:/docker-entrypoint-initdb.d/03-migration-002.sql:ro
+      - ./db/migrations/003_integrity.sql:/docker-entrypoint-initdb.d/04-migration-003.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
@@ -52,17 +56,19 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    # Host networking is strongly recommended for SIP/RTP in production.
-    # For local dev we publish the needed ports explicitly.
+    # Host networking is strongly recommended for SIP/RTP NAT in production
+    # (set `network_mode: host` and drop the ports block). For local dev we
+    # publish only the externally-reachable ports. ARI (8088) is internal-only
+    # and reached by the api service over the `aipbx` bridge — never published.
     ports:
       - "5060:5060/udp"        # SIP UDP
       - "5061:5061/tcp"        # SIP TLS
-      - "8088:8088/tcp"        # ARI / HTTP
       - "8089:8089/tcp"        # WebRTC WSS
       - "10000-10200:10000-10200/udp"  # RTP media
     environment:
       ARI_USERNAME: ${ARI_USERNAME}
       ARI_PASSWORD: ${ARI_PASSWORD}
+      SEED_SIP_PASSWORD: ${SEED_SIP_PASSWORD:-}
       ARI_APP: ${ARI_APP}
       PUBLIC_IP: ${PUBLIC_IP}
       RTP_START: ${RTP_START}
@@ -71,6 +77,12 @@ services:
     volumes:
       - asterisk_spool:/var/spool/asterisk
       - asterisk_keys:/etc/asterisk/keys
+    healthcheck:
+      test: ["CMD-SHELL", "asterisk -rx 'core show uptime' >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     networks: [aipbx]
     logging: *default-logging
 
@@ -102,6 +114,7 @@ services:
       - ARI_APP=${ARI_APP}
       - ASTERISK_HOST=${ASTERISK_HOST}
       - AI_ENGINE_URL=http://ai-engine:${AI_ENGINE_PORT}
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY:-}
       - S3_ENDPOINT=${S3_ENDPOINT}
       - S3_REGION=${S3_REGION}
       - S3_BUCKET=${S3_BUCKET}
@@ -128,6 +141,7 @@ services:
         condition: service_healthy
     environment:
       - AI_ENGINE_PORT=${AI_ENGINE_PORT}
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY:-}
       - AUDIOSOCKET_HOST=${AUDIOSOCKET_HOST}
       - AUDIOSOCKET_PORT=${AUDIOSOCKET_PORT}
       - DATABASE_URL=${DATABASE_URL}
@@ -148,9 +162,12 @@ services:
       - S3_BUCKET=${S3_BUCKET}
       - S3_ACCESS_KEY=${S3_ACCESS_KEY}
       - S3_SECRET_KEY=${S3_SECRET_KEY}
-    ports:
-      - "${AI_ENGINE_PORT}:${AI_ENGINE_PORT}"
-      - "${AUDIOSOCKET_PORT}:${AUDIOSOCKET_PORT}"
+    # No published ports: the HTTP control API (8080) is reached by `api` and the
+    # AudioSocket server (9092) by `asterisk`, both over the internal `aipbx`
+    # bridge. Exposing them would let anyone trigger billed LLM calls / hijack calls.
+    expose:
+      - "${AI_ENGINE_PORT}"
+      - "${AUDIOSOCKET_PORT}"
     networks: [aipbx]
     logging: *default-logging
 

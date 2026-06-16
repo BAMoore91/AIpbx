@@ -23,15 +23,20 @@ export interface PostCallSummary {
 }
 
 export class AiEngineClient {
-  constructor(private readonly baseUrl: string) {}
+  constructor(
+    private readonly baseUrl: string,
+    private readonly internalKey?: string,
+  ) {}
 
   private async post<T>(path: string, body: unknown): Promise<T | null> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 8000);
     try {
+      const headers: Record<string, string> = { 'content-type': 'application/json' };
+      if (this.internalKey) headers['x-internal-key'] = this.internalKey;
       const res = await fetch(`${this.baseUrl}${path}`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers,
         body: JSON.stringify(body),
         signal: controller.signal,
       });

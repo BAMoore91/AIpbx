@@ -80,6 +80,8 @@ jobs:
         run: PGPASSWORD=postgres psql -h localhost -U postgres -d aipbx -v ON_ERROR_STOP=1 -f db/asterisk_realtime.sql
       - name: Apply RBAC migration (idempotent)
         run: PGPASSWORD=postgres psql -h localhost -U postgres -d aipbx -v ON_ERROR_STOP=1 -f db/migrations/002_departments_rbac.sql
+      - name: Apply integrity migration (idempotent)
+        run: PGPASSWORD=postgres psql -h localhost -U postgres -d aipbx -v ON_ERROR_STOP=1 -f db/migrations/003_integrity.sql
 
   compose:
     name: docker-compose validate

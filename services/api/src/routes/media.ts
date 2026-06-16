@@ -148,7 +148,7 @@ export async function mediaRoutes(app: FastifyInstance): Promise<void> {
     const { id } = request.params as { id: string };
     const vm = await queryOne<VoicemailRow>(`SELECT * FROM voicemails WHERE tenant_id = $1 AND id = $2`, [auth.tenantId, id]);
     if (!vm) throw notFound('Voicemail not found');
-    await query(`DELETE FROM voicemails WHERE id = $1`, [id]);
+    await query(`DELETE FROM voicemails WHERE id = $1 AND tenant_id = $2`, [id, auth.tenantId]);
     try {
       await app.ctx.s3.delete(vm.s3_key);
     } catch {

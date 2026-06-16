@@ -88,7 +88,22 @@ export function registerResourceRoutes(
   registerCrud(app, { resource: 'time_conditions', table: 'time_conditions', writePermission: 'routing.manage', createSchema: S.timeConditionCreate, updateSchema: S.timeConditionUpdate, jsonbColumns: ['rules', 'holidays'] });
   registerCrud(app, { resource: 'ai_agents', table: 'ai_agents', writePermission: 'ai.manage', createSchema: S.aiAgentCreate, updateSchema: S.aiAgentUpdate, jsonbColumns: ['tools', 'settings'] });
   registerCrud(app, { resource: 'knowledge_bases', table: 'knowledge_bases', writePermission: 'ai.manage', createSchema: S.knowledgeBaseCreate, updateSchema: S.knowledgeBaseUpdate });
-  registerCrud(app, { resource: 'webhooks', table: 'webhooks', writePermission: 'settings.manage', createSchema: S.webhookCreate, updateSchema: S.webhookUpdate, redact: redactSecret('secret') });
+  registerCrud(app, {
+    resource: 'webhooks',
+    table: 'webhooks',
+    writePermission: 'settings.manage',
+    createSchema: S.webhookCreate,
+    updateSchema: S.webhookUpdate,
+    beforeCreate: (data) => {
+      const d = data as Record<string, unknown>;
+      return d.secret ? { ...d, secret: crypto.encrypt(String(d.secret)) } : d;
+    },
+    beforeUpdate: (data) => {
+      const d = data as Record<string, unknown>;
+      return d.secret ? { ...d, secret: crypto.encrypt(String(d.secret)) } : d;
+    },
+    redact: redactSecret('secret'),
+  });
 }
 
 function redactSecret(col: string) {

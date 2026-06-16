@@ -28,7 +28,7 @@ async function main(): Promise<void> {
 
   const config = loadConfig();
   initDb(config.databaseUrl);
-  const id = await createSuperadmin({ email, password, firstName, lastName });
+  const id = await createSuperadmin({ email, password, firstName, lastName }, { reset: true });
   await closeDb();
 
   if (!id) {

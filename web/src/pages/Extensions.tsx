@@ -96,7 +96,7 @@ export default function Extensions() {
       call_recording: 'on_demand',
       dnd: false,
       ring_timeout: 30,
-      sip_password: Math.random().toString(36).slice(2, 12),
+      sip_password: Array.from(crypto.getRandomValues(new Uint8Array(18)), (b) => b.toString(16).padStart(2, '0')).join(''),
       department_id: '',
     });
     setModalOpen(true);
@@ -259,7 +259,7 @@ export default function Extensions() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <Input label="SIP Username" placeholder="1001" error={errors.sip_username?.message} {...register('sip_username')} />
-            <Input label="SIP Password" type="text" error={errors.sip_password?.message} {...register('sip_password')} />
+            <Input label="SIP Password" type="password" autoComplete="new-password" error={errors.sip_password?.message} {...register('sip_password')} />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <Select

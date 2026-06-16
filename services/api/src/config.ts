@@ -45,6 +45,7 @@ const ConfigSchema = z.object({
   }),
 
   aiEngineUrl: z.string().default('http://ai-engine:8080'),
+  internalApiKey: z.string().optional(),
 
   s3: z.object({
     endpoint: z.string().optional(),
@@ -96,6 +97,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       enabled: env.ARI_ENABLED !== 'false',
     },
     aiEngineUrl: env.AI_ENGINE_URL,
+  internalApiKey: env.INTERNAL_API_KEY,
     s3: {
       endpoint: env.S3_ENDPOINT,
       region: env.S3_REGION,

@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     database_url: str = Field(default="", alias="DATABASE_URL")
     redis_url: str = Field(default="", alias="REDIS_URL")
 
+    # Shared secret for the internal control API. When set, mutating routes
+    # require header `x-internal-key`. The engine also has no published ports
+    # (reached only over the private docker network), so this is defense-in-depth.
+    internal_api_key: str = Field(default="", alias="INTERNAL_API_KEY")
+
     # ---- LLM (Claude) ----
     anthropic_api_key: str = Field(default="", alias="ANTHROPIC_API_KEY")
     llm_model: str = Field(default="claude-opus-4-8", alias="LLM_MODEL")

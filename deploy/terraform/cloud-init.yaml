@@ -188,7 +188,20 @@ runcmd:
   - systemctl start fail2ban
 
   # --------------------------------------------------------------------------
-  # 5. Pull images and start the stack
+  # 5. Seed a self-signed placeholder cert so nginx :443 starts on first boot
+  #    (the LE files don't exist until init-letsencrypt runs → else deadlock).
+  # --------------------------------------------------------------------------
+  - docker volume create aipbx_certbot_certs || true
+  - >
+    docker run --rm -v aipbx_certbot_certs:/etc/letsencrypt alpine:3.20 sh -c
+    'set -e; D=/etc/letsencrypt/live/${fqdn};
+    if [ -f $D/fullchain.pem ]; then exit 0; fi;
+    apk add --no-cache openssl >/dev/null; mkdir -p $D;
+    openssl req -x509 -newkey rsa:2048 -nodes -days 3 -keyout $D/privkey.pem -out $D/fullchain.pem -subj /CN=${fqdn} >/dev/null 2>&1;
+    cp $D/fullchain.pem $D/chain.pem'
+
+  # --------------------------------------------------------------------------
+  # 6. Pull images and start the stack
   # --------------------------------------------------------------------------
   - cd /opt/aipbx && docker compose pull --quiet || true
   - cd /opt/aipbx && docker compose up -d --build

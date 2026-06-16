@@ -1,6 +1,7 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { tokenStorage } from './auth';
 import { queryClient } from './queryClient';
+import { useAuthStore } from '@/store/authStore';
 import type {
   AuthTokens, User, PaginatedResponse, ListParams,
   Extension, Trunk, DIDNumber, OutboundRoute, RingGroup,
@@ -37,8 +38,11 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  // Only superadmins may target another tenant. The server enforces this too,
+  // but we don't even send the header otherwise (avoids confusing a normal
+  // user's session if the key is ever set by something else in the origin).
   const activeTenant = tenantContext.get();
-  if (activeTenant) {
+  if (activeTenant && useAuthStore.getState().user?.role === 'superadmin') {
     config.headers['X-Tenant-Id'] = activeTenant;
   }
   return config;
