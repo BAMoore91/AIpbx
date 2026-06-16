@@ -90,7 +90,7 @@ nginx is running, issue Let's Encrypt certificates:
 ssh root@$(terraform output -raw floating_ip)
 cd /opt/aipbx
 export DOMAIN=pbx.example.com
-export EMAIL=admin@example.com
+export EMAIL=admin@pbx.example.com
 bash deploy/scripts/init-letsencrypt.sh
 ```
 

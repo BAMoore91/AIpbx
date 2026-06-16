@@ -72,7 +72,7 @@ export JWT_SECRET="..." JWT_REFRESH_SECRET="..." ENCRYPTION_KEY="..."
 export INTERNAL_API_KEY="..." SEED_SIP_PASSWORD="..."
 
 # First-run console superadmin (so you can log in immediately)
-export BOOTSTRAP_ADMIN_EMAIL="admin@example.com"
+export BOOTSTRAP_ADMIN_EMAIL="admin@pbx.example.com"
 export BOOTSTRAP_ADMIN_PASSWORD="<a strong password>"
 
 # AI providers (optional — AI voice agents need these)
@@ -134,7 +134,7 @@ Open **`https://pbx.example.com`** and log in with `BOOTSTRAP_ADMIN_EMAIL` /
 `BOOTSTRAP_ADMIN_PASSWORD`. If login fails:
 
 ```bash
-docker compose exec -T api node dist/scripts/create-admin.js admin@example.com 'StrongPass!'
+docker compose exec -T api node dist/scripts/create-admin.js admin@pbx.example.com 'StrongPass!'
 ```
 
 ---

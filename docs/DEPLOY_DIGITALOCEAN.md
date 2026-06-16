@@ -125,7 +125,7 @@ do the **Post-deploy** steps below.
    JWT_SECRET=... JWT_REFRESH_SECRET=... ENCRYPTION_KEY=... ARI_PASSWORD=... \
    ANTHROPIC_API_KEY=... DEEPGRAM_API_KEY=... ELEVENLABS_API_KEY=... \
    S3_ACCESS_KEY=... S3_SECRET_KEY=... \
-   BOOTSTRAP_ADMIN_EMAIL=admin@example.com BOOTSTRAP_ADMIN_PASSWORD='StrongPass!' \
+   BOOTSTRAP_ADMIN_EMAIL=admin@pbx.example.com BOOTSTRAP_ADMIN_PASSWORD='StrongPass!' \
    bash bootstrap.sh
    ```
    (Setting `BOOTSTRAP_ADMIN_*` creates a working superadmin on startup. If you
@@ -156,7 +156,7 @@ Run from the droplet, in `/opt/aipbx`.
    **superadmin**, so multi-tenant management is enabled out of the box. To add
    or reset one later:
    ```bash
-   make create-admin EMAIL=admin@example.com PASSWORD='StrongPass!'
+   make create-admin EMAIL=admin@pbx.example.com PASSWORD='StrongPass!'
    ```
    *(Optional)* `make seed` adds demo extensions + a demo AI agent if you want
    sample data to explore.

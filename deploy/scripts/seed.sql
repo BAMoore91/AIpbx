@@ -68,7 +68,7 @@ VALUES (
     now(),
     now()
 )
-ON CONFLICT (email) DO NOTHING;
+ON CONFLICT (tenant_id, email) DO NOTHING;
 
 
 -- =============================================================================

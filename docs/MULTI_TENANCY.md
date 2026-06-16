@@ -35,7 +35,7 @@ plugin. There is no code path that returns cross-tenant data to a normal user.
 `role` to `superadmin` (e.g. promote the seeded default admin):
 
 ```sql
-UPDATE users SET role = 'superadmin' WHERE email = 'admin@example.com';
+UPDATE users SET role = 'superadmin' WHERE email = 'admin@pbx.example.com';
 ```
 
 ## Isolation guarantees

@@ -21,7 +21,7 @@ subdomain = "pbx"
 acme_email = "ops@example.com"
 
 # Bootstrap superadmin (created on first boot so you can log in immediately)
-admin_email    = "admin@example.com"
+admin_email    = "admin@pbx.example.com"
 admin_password = "REPLACE_ME_strong_admin_password"
 
 # SSH — find with: doctl compute ssh-key list
