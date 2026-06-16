@@ -37,6 +37,9 @@ your working notes** so you can paste consistently:
 - `JWT_SECRET`, `JWT_REFRESH_SECRET` (64+ chars each)
 - `ENCRYPTION_KEY` — a 32-byte base64 string (44 chars ending in `=`), e.g.
   generate 32 random bytes and base64-encode them.
+- `INTERNAL_API_KEY` — shared secret between the API and the AI engine.
+- `SEED_SIP_PASSWORD` — *optional*; SIP secret for the two demo extensions
+  (1001/1002). Leave blank to disable them (real extensions are made in the UI).
 
 Keep every secret only in this session's notes; never paste them into a page
 other than the DO forms described below.
@@ -157,6 +160,12 @@ export S3_SECRET_KEY="__SPACES_SECRET_KEY__"
 
 export BOOTSTRAP_ADMIN_EMAIL="__ADMIN_EMAIL__"
 export BOOTSTRAP_ADMIN_PASSWORD="__ADMIN_PASSWORD__"
+
+export INTERNAL_API_KEY="__INTERNAL_API_KEY__"
+# Optional: demo extensions 1001/1002 SIP secret (omit to disable them).
+export SEED_SIP_PASSWORD="__SEED_SIP_PASSWORD_OR_BLANK__"
+# Data retention defaults to 90 days; override here if needed:
+# export RETENTION_DAYS="90"
 
 export PUBLIC_IP="$(curl -fsSL https://ifconfig.me || hostname -I | awk '{print $1}')"
 # If you assigned a RESERVED IP, hardcode it instead:
