@@ -23,25 +23,39 @@ export interface TokenPair {
   user: PublicUser;
 }
 
+// Wire shape sent to the web client. snake_case to match the DB columns and the
+// rest of the API's resource payloads (the web `User` type is snake_case); a
+// camelCase mismatch here previously left `user.first_name` undefined on the
+// client and crashed the app shell after login.
 export interface PublicUser {
   id: string;
-  tenantId: string;
+  tenant_id: string;
   email: string;
-  firstName: string | null;
-  lastName: string | null;
+  first_name: string | null;
+  last_name: string | null;
   role: string;
-  mfaEnabled: boolean;
+  mfa_enabled: boolean;
+  avatar_url: string | null;
+  is_active: boolean;
+  last_login_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 function toPublicUser(u: UserRow): PublicUser {
   return {
     id: u.id,
-    tenantId: u.tenant_id,
+    tenant_id: u.tenant_id,
     email: u.email,
-    firstName: u.first_name,
-    lastName: u.last_name,
+    first_name: u.first_name,
+    last_name: u.last_name,
     role: u.role,
-    mfaEnabled: u.mfa_enabled,
+    mfa_enabled: u.mfa_enabled,
+    avatar_url: u.avatar_url,
+    is_active: u.is_active,
+    last_login_at: u.last_login_at,
+    created_at: u.created_at,
+    updated_at: u.updated_at,
   };
 }
 

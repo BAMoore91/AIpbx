@@ -51,8 +51,8 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     await audit(
       {
         userId: result.user.id,
-        tenantId: result.user.tenantId,
-        homeTenantId: result.user.tenantId,
+        tenantId: result.user.tenant_id,
+        homeTenantId: result.user.tenant_id,
         impersonating: false,
         role: result.user.role as UserRole,
         email: result.user.email,

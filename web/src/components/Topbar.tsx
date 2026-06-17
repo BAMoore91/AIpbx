@@ -39,8 +39,14 @@ export function Topbar({ onSidebarToggle, darkMode, onDarkModeToggle }: TopbarPr
     logout();
   };
 
-  const fullName = user ? `${user.first_name} ${user.last_name}` : 'User';
-  const initials = user ? `${user.first_name[0]}${user.last_name[0]}`.toUpperCase() : 'U';
+  // Defensive: never assume names are present. A user without a first/last name
+  // must not be able to crash the shell (this is rendered outside the page-level
+  // ErrorBoundary, so a throw here white-screens the whole app).
+  const fullName =
+    [user?.first_name, user?.last_name].filter(Boolean).join(' ') || user?.email || 'User';
+  const initials =
+    ((user?.first_name?.[0] ?? '') + (user?.last_name?.[0] ?? '')).toUpperCase() ||
+    (user?.email?.[0]?.toUpperCase() ?? 'U');
 
   return (
     <header className="h-14 flex items-center gap-3 px-4 border-b border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-900">

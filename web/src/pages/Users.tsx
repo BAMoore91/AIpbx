@@ -88,10 +88,10 @@ export default function Users() {
       render: (row) => (
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
-            {row.first_name[0]}{row.last_name[0]}
+            {((row.first_name?.[0] ?? '') + (row.last_name?.[0] ?? '')).toUpperCase() || (row.email?.[0]?.toUpperCase() ?? '?')}
           </div>
           <div>
-            <p className="font-medium text-surface-800 dark:text-surface-200">{row.first_name} {row.last_name}</p>
+            <p className="font-medium text-surface-800 dark:text-surface-200">{[row.first_name, row.last_name].filter(Boolean).join(' ') || row.email}</p>
             <p className="text-xs text-surface-400">{row.email}</p>
           </div>
         </div>

@@ -202,7 +202,9 @@ export default function App() {
           path="/*"
           element={
             <AuthGuard>
-              <AppLayout />
+              <ErrorBoundary>
+                <AppLayout />
+              </ErrorBoundary>
             </AuthGuard>
           }
         />
