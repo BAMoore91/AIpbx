@@ -87,6 +87,41 @@ install_base_tools() {
 }
 
 # -----------------------------------------------------------------------------
+# 0b. Ensure swap on small hosts so the front-end (Vite) build doesn't OOM.
+#     The web image build needs well over 1 GB during minification; small
+#     droplets thrash/stall or get OOM-killed without swap. Adds a 4 GB swapfile
+#     when total RAM < ~3 GB and no swap is active. Resizing the droplet to
+#     >= 8 GB is still recommended for running calls.
+# -----------------------------------------------------------------------------
+ensure_swap() {
+    local mem_kb swap_kb
+    mem_kb=$(awk '/MemTotal/{print $2}' /proc/meminfo)
+    swap_kb=$(awk '/SwapTotal/{print $2}' /proc/meminfo)
+    if [ "${mem_kb:-0}" -ge 3000000 ]; then
+        return  # >= ~3 GB RAM: build is fine without added swap
+    fi
+    if [ "${swap_kb:-0}" -ge 2000000 ]; then
+        ok "swap already present ($((swap_kb/1024)) MB) on a small host"
+        return
+    fi
+    if [ -e /swapfile ]; then
+        log "Enabling existing /swapfile..."
+        swapon /swapfile 2>/dev/null || true
+        return
+    fi
+    log "Low RAM ($((mem_kb/1024)) MB) — creating a 4 GB swapfile so the build won't OOM..."
+    if fallocate -l 4G /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=4096 status=none; then
+        chmod 600 /swapfile
+        mkswap /swapfile >/dev/null
+        swapon /swapfile
+        grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+        ok "4 GB swap enabled"
+    else
+        log "WARN: could not create swap; the web build may OOM on this droplet size"
+    fi
+}
+
+# -----------------------------------------------------------------------------
 # 1. Install Docker CE (idempotent)
 # -----------------------------------------------------------------------------
 install_docker() {
@@ -361,6 +396,7 @@ main() {
     log "  DOMAIN      : ${DOMAIN}"
 
     install_base_tools
+    ensure_swap
     install_docker
     setup_repo
     write_env
