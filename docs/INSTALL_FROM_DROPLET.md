@@ -125,7 +125,7 @@ console/API (443), and copies it into the Asterisk keys volume as
 ```bash
 cd /opt/aipbx
 docker compose ps                                              # all services Up/healthy
-curl -fsS https://pbx.example.com/api/healthz                  # {"status":"ok",...}
+curl -fsS https://pbx.example.com/healthz                      # {"status":"ok",...}
 docker compose exec -T asterisk asterisk -rx "odbc show"       # DSN 'asterisk' Connected
 docker compose logs api | grep -i superadmin | tail -1         # "superadmin created"
 ```

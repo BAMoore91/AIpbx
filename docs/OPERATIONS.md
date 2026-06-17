@@ -263,7 +263,7 @@ bash /opt/aipbx/deploy/scripts/healthcheck.sh --json
 ### API Health Endpoint
 
 ```bash
-curl -sf https://DOMAIN/api/healthz
+curl -sf https://DOMAIN/healthz
 ```
 
 Expected: `{"status":"ok","version":"...","uptime":12345,"db":"ok","redis":"ok","asterisk":"ok"}`
