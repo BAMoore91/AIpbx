@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Monitor, Users, Phone, PhoneForwarded,
   GitBranch, Clock, Network, Brain, BookOpen, PhoneCall,
   Mic, Mail, Voicemail, BarChart3, Settings, ChevronRight,
-  Radio, Building2, Building, ShieldCheck,
+  Radio, Building2, Building, ShieldCheck, X,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useAuthStore } from '@/store/authStore';
@@ -86,11 +86,16 @@ const NAV: NavGroup[] = [
 ];
 
 interface SidebarProps {
+  /** Desktop icon-rail mode (md+ only). */
   collapsed?: boolean;
+  /** Mobile drawer open state (< md only). */
+  mobileOpen?: boolean;
   onToggle?: () => void;
+  /** Close the mobile drawer (backdrop tap / nav tap / close button). */
+  onClose?: () => void;
 }
 
-export function Sidebar({ collapsed = false }: SidebarProps) {
+export function Sidebar({ collapsed = false, mobileOpen = false, onClose }: SidebarProps) {
   const location = useLocation();
   const role = useAuthStore((s) => s.user?.role);
   const { can } = usePermissions();
@@ -107,31 +112,46 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
     <aside
       className={clsx(
         'flex flex-col h-full bg-surface-900 dark:bg-surface-950 border-r border-surface-700/50 transition-all duration-200',
-        collapsed ? 'w-14' : 'w-60'
+        // Off-canvas drawer on mobile; part of the flex layout on md+.
+        'fixed inset-y-0 left-0 z-40 md:static md:z-auto',
+        mobileOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:translate-x-0',
+        // Full-width drawer on mobile; icon rail / full rail on desktop.
+        'w-64',
+        collapsed ? 'md:w-14' : 'md:w-60'
       )}
     >
       {/* Logo */}
       <div className={clsx(
         'flex items-center gap-2 px-4 py-4 border-b border-surface-700/50',
-        collapsed && 'justify-center px-2'
+        collapsed && 'md:justify-center md:px-2'
       )}>
         <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center flex-shrink-0">
           <Phone size={14} className="text-white" />
         </div>
-        {!collapsed && (
-          <div>
-            <span className="text-sm font-bold text-white">AIpbx</span>
-            <span className="ml-1 text-2xs font-medium text-surface-400">console</span>
-          </div>
-        )}
+        <div className={clsx(collapsed && 'md:hidden')}>
+          <span className="text-sm font-bold text-white">AIpbx</span>
+          <span className="ml-1 text-2xs font-medium text-surface-400">console</span>
+        </div>
+        {/* Close button — mobile only */}
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close menu"
+          className="ml-auto md:hidden text-surface-400 hover:text-surface-200 p-1 -mr-1"
+        >
+          <X size={18} />
+        </button>
       </div>
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-3 px-2 no-scrollbar space-y-1">
         {groups.map((group, gi) => (
           <div key={gi} className={gi > 0 ? 'mt-2' : ''}>
-            {group.title && !collapsed && (
-              <p className="px-3 py-1 text-2xs font-semibold text-surface-500 uppercase tracking-wider">
+            {group.title && (
+              <p className={clsx(
+                'px-3 py-1 text-2xs font-semibold text-surface-500 uppercase tracking-wider',
+                collapsed && 'md:hidden'
+              )}>
                 {group.title}
               </p>
             )}
@@ -142,23 +162,27 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
                   key={item.to}
                   to={item.to}
                   title={collapsed ? item.label : undefined}
+                  onClick={onClose}
                   className={clsx(
                     'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150',
-                    collapsed ? 'justify-center' : '',
+                    collapsed && 'md:justify-center',
                     isActive
                       ? 'bg-primary-600/20 text-primary-300'
                       : 'text-surface-400 hover:bg-surface-700/50 hover:text-surface-200'
                   )}
                 >
                   <item.icon size={16} className="flex-shrink-0" />
-                  {!collapsed && <span className="flex-1">{item.label}</span>}
-                  {!collapsed && item.badge && (
-                    <span className="text-2xs bg-primary-500 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center">
+                  <span className={clsx('flex-1', collapsed && 'md:hidden')}>{item.label}</span>
+                  {item.badge && (
+                    <span className={clsx(
+                      'text-2xs bg-primary-500 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center',
+                      collapsed && 'md:hidden'
+                    )}>
                       {item.badge}
                     </span>
                   )}
-                  {!collapsed && isActive && (
-                    <ChevronRight size={12} className="text-primary-400" />
+                  {isActive && (
+                    <ChevronRight size={12} className={clsx('text-primary-400', collapsed && 'md:hidden')} />
                   )}
                 </NavLink>
               );

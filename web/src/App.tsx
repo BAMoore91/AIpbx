@@ -1,5 +1,5 @@
 import { useState, useEffect, Suspense, lazy } from 'react';
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { useAuthStore } from './store/authStore';
 import { useCallStore } from './store/callStore';
@@ -64,11 +64,28 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
 function AppLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const location = useLocation();
   const [darkMode, setDarkMode] = useState(() => {
     const stored = localStorage.getItem('aipbx-dark-mode');
     return stored ? stored === 'true' : window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
   const { addOrUpdateCall, removeCall, updateQueueStats } = useCallStore();
+
+  // The hamburger does double duty: on desktop it collapses the rail to icons;
+  // on mobile (< md) it opens/closes the off-canvas drawer.
+  const toggleSidebar = () => {
+    if (typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches) {
+      setSidebarCollapsed((v) => !v);
+    } else {
+      setMobileNavOpen((v) => !v);
+    }
+  };
+
+  // Close the mobile drawer whenever the route changes (e.g. a nav tap).
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [location.pathname]);
 
   // Apply dark mode class
   useEffect(() => {
@@ -103,13 +120,23 @@ function AppLayout() {
 
   return (
     <div className={clsx('flex h-full', darkMode && 'dark')}>
+      {/* Mobile drawer backdrop */}
+      {mobileNavOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm md:hidden"
+          onClick={() => setMobileNavOpen(false)}
+          aria-hidden="true"
+        />
+      )}
       <Sidebar
         collapsed={sidebarCollapsed}
-        onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+        mobileOpen={mobileNavOpen}
+        onToggle={toggleSidebar}
+        onClose={() => setMobileNavOpen(false)}
       />
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <Topbar
-          onSidebarToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+          onSidebarToggle={toggleSidebar}
           darkMode={darkMode}
           onDarkModeToggle={() => setDarkMode(!darkMode)}
         />
