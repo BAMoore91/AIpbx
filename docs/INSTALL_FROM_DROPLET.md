@@ -158,9 +158,15 @@ docker compose exec -T api node dist/scripts/create-admin.js admin@pbx.example.c
 cd /opt/aipbx
 docker compose logs -f api asterisk ai-engine     # logs
 git pull && docker compose up -d --build          # update
-make create-admin EMAIL=.. PASSWORD=..            # add/reset an admin
 bash deploy/scripts/backup.sh                      # pg_dump → Spaces
+
+# Add / reset an admin (bootstrap installs `make`; if missing, run the direct form):
+docker compose exec -T api node dist/scripts/create-admin.js 'admin@pbx.example.com' 'NewStrongPass'
+#   …or, with make:  make create-admin EMAIL=admin@pbx.example.com PASSWORD='NewStrongPass'
 ```
+
+> `make` not found? Either `apt-get install -y make`, or just use the
+> `docker compose exec … create-admin.js` form above — it's what the Makefile runs.
 
 Production tuning (resource limits, Asterisk host-networking for NAT):
 `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`
@@ -173,6 +179,8 @@ Production tuning (resource limits, Asterisk host-networking for NAT):
 | Console won't load | `docker compose ps`; `docker compose logs nginx web api` |
 | No TLS | `dig +short pbx.<domain>` matches the droplet, port 80 open, then re-run `init-letsencrypt.sh` |
 | Extension not in `pjsip show endpoints` | `asterisk -rx "odbc show"` must show DSN connected; confirm `db/asterisk_realtime.sql` applied |
-| Can't log in | confirm `BOOTSTRAP_ADMIN_*` were set, or run `make create-admin`; `docker compose logs api` |
+| Can't log in | confirm `BOOTSTRAP_ADMIN_*` were set, or run `docker compose exec -T api node dist/scripts/create-admin.js EMAIL PASSWORD`; `docker compose logs api` |
+| `make: command not found` | `apt-get install -y make` (bootstrap now installs it), or use the direct `docker compose exec … create-admin.js` form |
+| Build hangs / containers OOM-killed | the droplet is too small — AIpbx needs **≥ 4 vCPU / 8 GB**; resize the droplet (a 1 GB droplet cannot build/run the full stack) |
 | Softphone won't register | 5060/udp + 10000–10200/udp open; `PUBLIC_IP` in `.env` = the droplet/reserved IP |
 | AI agent silent | `docker compose logs ai-engine`; confirm `ANTHROPIC_API_KEY` + STT/TTS keys |

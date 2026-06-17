@@ -73,6 +73,20 @@ ok()   { echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] OK: $*"; }
 die()  { echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] ERROR: $*" >&2; exit 1; }
 
 # -----------------------------------------------------------------------------
+# 0. Base CLI tools used by this script and the Makefile (git, make, curl).
+# -----------------------------------------------------------------------------
+install_base_tools() {
+    if command -v git &>/dev/null && command -v make &>/dev/null; then
+        ok "base tools (git, make) already present"
+        return
+    fi
+    log "Installing base tools (git, make, curl, openssl)..."
+    apt-get update -qq
+    apt-get install -y --no-install-recommends git make curl openssl ca-certificates
+    ok "base tools installed"
+}
+
+# -----------------------------------------------------------------------------
 # 1. Install Docker CE (idempotent)
 # -----------------------------------------------------------------------------
 install_docker() {
@@ -346,6 +360,7 @@ main() {
     log "  REPO_BRANCH : ${REPO_BRANCH}"
     log "  DOMAIN      : ${DOMAIN}"
 
+    install_base_tools
     install_docker
     setup_repo
     write_env
