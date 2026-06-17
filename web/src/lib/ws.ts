@@ -3,6 +3,20 @@ import { tokenStorage } from './auth';
 
 type EventHandler = (event: WSEvent) => void;
 
+/**
+ * Resolve the WS endpoint. A relative value (e.g. "/ws") is turned into an
+ * absolute ws(s):// URL against the current page origin — so the app works by
+ * IP or domain with no rebuild, and inherits TLS from the page (wss on https).
+ * Absolute ws(s):// values are used as-is.
+ */
+function resolveWsUrl(value: string): string {
+  if (/^wss?:\/\//i.test(value)) return value;
+  if (typeof window === 'undefined') return value;
+  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const path = value.startsWith('/') ? value : `/${value}`;
+  return `${proto}//${window.location.host}${path}`;
+}
+
 class WSClient {
   private ws: WebSocket | null = null;
   private handlers: Map<string, Set<EventHandler>> = new Map();
@@ -13,7 +27,7 @@ class WSClient {
   private url: string;
 
   constructor() {
-    this.url = import.meta.env.VITE_WS_URL ?? 'wss://localhost:8080/ws';
+    this.url = resolveWsUrl(import.meta.env.VITE_WS_URL ?? '/ws');
   }
 
   connect() {

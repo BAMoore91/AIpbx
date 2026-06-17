@@ -39,13 +39,20 @@ export default function Login() {
       setAuth(result.user, result.accessToken, result.refreshToken);
       navigate('/dashboard', { replace: true });
     } catch (err: unknown) {
-      const status = (err as { response?: { status?: number; data?: { mfa_required?: boolean; message?: string } } })?.response?.status;
-      const body = (err as { response?: { data?: { mfa_required?: boolean; message?: string } } })?.response?.data;
+      const response = (err as { response?: { status?: number; data?: { mfa_required?: boolean; message?: string } } })?.response;
+      const status = response?.status;
+      const body = response?.data;
       if (status === 401 && body?.mfa_required) {
         setMfaRequired(true);
         toast('Enter your MFA code to continue.', { icon: '🔐' });
-      } else {
+      } else if (!response) {
+        // No HTTP response at all → the API was unreachable (DNS/cert/CORS/network),
+        // NOT bad credentials. Don't mislead the operator.
+        toast.error('Cannot reach the server. Check the API URL / TLS / network.');
+      } else if (status === 401) {
         toast.error(body?.message ?? 'Invalid email or password.');
+      } else {
+        toast.error(body?.message ?? `Login failed (HTTP ${status}).`);
       }
     } finally {
       setLoading(false);

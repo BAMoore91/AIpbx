@@ -246,8 +246,8 @@ SMTP_FROM=${SMTP_FROM}
 
 # ---- Web frontend ----
 WEB_PORT=80
-VITE_API_URL=https://${DOMAIN}/api
-VITE_WS_URL=wss://${DOMAIN}/ws
+VITE_API_URL=/api
+VITE_WS_URL=/ws
 VITE_SIP_WSS_URL=wss://${DOMAIN}:8089/ws
 ENVEOF
 
