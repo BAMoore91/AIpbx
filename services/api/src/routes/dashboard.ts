@@ -11,7 +11,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     const auth = requireAuth(request);
     const t = auth.tenantId;
 
-    const [active, today, queueSla, sentiment, agents] = await Promise.all([
+    const [active, today, queueSla, sentiment, byHour] = await Promise.all([
       queryOne<{ count: string }>(
         `SELECT count(*)::text AS count FROM calls WHERE tenant_id = $1 AND status NOT IN ('ended')`,
         [t],
@@ -20,30 +20,28 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
         total: string;
         answered: string;
         missed: string;
-        inbound: string;
-        outbound: string;
         avg_talk: string | null;
       }>(
         `SELECT
             count(*)::text AS total,
             count(*) FILTER (WHERE disposition = 'answered')::text AS answered,
             count(*) FILTER (WHERE disposition IN ('no-answer','abandoned','busy','failed'))::text AS missed,
-            count(*) FILTER (WHERE direction = 'inbound')::text AS inbound,
-            count(*) FILTER (WHERE direction = 'outbound')::text AS outbound,
             avg(talk_seconds)::numeric(10,1)::text AS avg_talk
          FROM calls
          WHERE tenant_id = $1 AND started_at >= date_trunc('day', now())`,
         [t],
       ),
-      query<{ queue_id: string; name: string; within_sla: string; total: string }>(
-        `SELECT q.id AS queue_id, q.name,
+      query<{ name: string; within_sla: string; total: string }>(
+        `SELECT q.name,
                 count(c.*) FILTER (WHERE c.ring_seconds <= q.service_level)::text AS within_sla,
                 count(c.*)::text AS total
          FROM queues q
          LEFT JOIN calls c ON c.queue_id = q.id AND c.tenant_id = $1
               AND c.started_at >= date_trunc('day', now())
          WHERE q.tenant_id = $1
-         GROUP BY q.id, q.name, q.service_level`,
+         GROUP BY q.id, q.name, q.service_level
+         ORDER BY count(c.*) DESC
+         LIMIT 5`,
         [t],
       ),
       query<{ sentiment: string | null; count: string }>(
@@ -53,33 +51,57 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
          GROUP BY sentiment`,
         [t],
       ),
-      queryOne<{ count: string }>(
-        `SELECT count(*)::text AS count FROM ai_agents WHERE tenant_id = $1 AND is_active = true`,
+      query<{ hour: string; calls: string; answered: string }>(
+        `SELECT to_char(date_trunc('hour', started_at), 'HH24:00') AS hour,
+                count(*)::text AS calls,
+                count(*) FILTER (WHERE disposition = 'answered')::text AS answered
+         FROM calls
+         WHERE tenant_id = $1 AND started_at >= date_trunc('day', now())
+         GROUP BY 1 ORDER BY 1`,
         [t],
       ),
     ]);
 
-    const queueSlaPct = queueSla.rows.map((r) => ({
-      queueId: r.queue_id,
+    // Top queues (today) + an overall SLA % across all of them.
+    const topQueues = queueSla.rows.map((r) => ({
       name: r.name,
-      total: Number(r.total),
-      withinSla: Number(r.within_sla),
-      slaPct: Number(r.total) > 0 ? Math.round((Number(r.within_sla) / Number(r.total)) * 100) : 100,
+      waiting: 0,
+      sla: Number(r.total) > 0 ? Math.round((Number(r.within_sla) / Number(r.total)) * 100) : 100,
     }));
+    const slaTotals = queueSla.rows.reduce(
+      (acc, r) => ({ within: acc.within + Number(r.within_sla), total: acc.total + Number(r.total) }),
+      { within: 0, total: 0 },
+    );
+    const queueSlaPct = slaTotals.total > 0 ? (slaTotals.within / slaTotals.total) * 100 : 100;
 
+    // Sentiment counts (7d) → whole-number percentages.
+    const sCounts = { positive: 0, neutral: 0, negative: 0 };
+    for (const r of sentiment.rows) {
+      const k = (r.sentiment ?? '').toLowerCase();
+      if (k === 'positive' || k === 'neutral' || k === 'negative') sCounts[k] = Number(r.count);
+    }
+    const sTotal = sCounts.positive + sCounts.neutral + sCounts.negative;
+    const pct = (n: number) => (sTotal > 0 ? Math.round((n / sTotal) * 100) : 0);
+
+    // Shape MUST match the web `DashboardStats` type (snake_case).
     return reply.send({
-      activeCalls: Number(active?.count ?? 0),
-      today: {
-        total: Number(today?.total ?? 0),
-        answered: Number(today?.answered ?? 0),
-        missed: Number(today?.missed ?? 0),
-        inbound: Number(today?.inbound ?? 0),
-        outbound: Number(today?.outbound ?? 0),
-        avgTalkSeconds: today?.avg_talk ? Number(today.avg_talk) : 0,
+      active_calls: Number(active?.count ?? 0),
+      calls_today: Number(today?.total ?? 0),
+      answered_today: Number(today?.answered ?? 0),
+      missed_today: Number(today?.missed ?? 0),
+      avg_handle_time: today?.avg_talk ? Math.round(Number(today.avg_talk)) : 0,
+      queue_sla_pct: queueSlaPct,
+      sentiment_breakdown: {
+        positive: pct(sCounts.positive),
+        neutral: pct(sCounts.neutral),
+        negative: pct(sCounts.negative),
       },
-      queueSla: queueSlaPct,
-      sentiment: Object.fromEntries(sentiment.rows.map((r) => [r.sentiment ?? 'unknown', Number(r.count)])),
-      activeAiAgents: Number(agents?.count ?? 0),
+      calls_by_hour: byHour.rows.map((r) => ({
+        hour: r.hour,
+        calls: Number(r.calls),
+        answered: Number(r.answered),
+      })),
+      top_queues: topQueues,
     });
   });
 

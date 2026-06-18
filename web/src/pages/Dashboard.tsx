@@ -47,11 +47,12 @@ export default function Dashboard() {
     return unsub;
   }, [queryClient]);
 
-  const sentimentData = stats
+  const sb = stats?.sentiment_breakdown;
+  const sentimentData = sb
     ? [
-        { name: 'Positive', value: stats.sentiment_breakdown.positive, color: SENTIMENT_COLORS.positive },
-        { name: 'Neutral',  value: stats.sentiment_breakdown.neutral,  color: SENTIMENT_COLORS.neutral },
-        { name: 'Negative', value: stats.sentiment_breakdown.negative, color: SENTIMENT_COLORS.negative },
+        { name: 'Positive', value: sb.positive ?? 0, color: SENTIMENT_COLORS.positive },
+        { name: 'Neutral',  value: sb.neutral ?? 0,  color: SENTIMENT_COLORS.neutral },
+        { name: 'Negative', value: sb.negative ?? 0, color: SENTIMENT_COLORS.negative },
       ]
     : [];
 
@@ -116,7 +117,7 @@ export default function Dashboard() {
         />
         <StatCard
           title="Queue SLA"
-          value={stats ? `${stats.queue_sla_pct.toFixed(1)}%` : '—'}
+          value={stats?.queue_sla_pct != null ? `${stats.queue_sla_pct.toFixed(1)}%` : '—'}
           icon={<TrendingUp size={18} />}
           iconColor="bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400"
           loading={isLoading}
@@ -124,7 +125,7 @@ export default function Dashboard() {
         />
         <StatCard
           title="Positive Sentiment"
-          value={stats ? `${stats.sentiment_breakdown.positive}%` : '—'}
+          value={sb ? `${sb.positive ?? 0}%` : '—'}
           icon={<Headphones size={18} />}
           iconColor="bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400"
           loading={isLoading}
