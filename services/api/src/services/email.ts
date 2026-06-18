@@ -33,6 +33,11 @@ export class EmailService {
     }
   }
 
+  /** True when SMTP is configured and mail will actually be delivered. */
+  get enabled(): boolean {
+    return this.transporter !== null;
+  }
+
   async send(msg: EmailMessage): Promise<void> {
     if (!this.transporter) {
       logger.info({ to: msg.to, subject: msg.subject }, 'email skipped (no SMTP)');

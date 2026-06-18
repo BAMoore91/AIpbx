@@ -136,7 +136,28 @@ function crud<T, C = Partial<T>>(resource: string) {
 }
 
 // ─── Resource APIs ────────────────────────────────────────────────────────────
-export const usersApi = crud<User>('users');
+export interface UserProvisionInput {
+  email: string;
+  first_name?: string;
+  last_name?: string;
+  role?: 'admin' | 'supervisor' | 'agent' | 'user';
+  mode: 'generate' | 'invite';
+  extension_id?: string;
+}
+export interface UserProvisionResult {
+  user: { id: string; email: string; first_name: string | null; last_name: string | null; role: string };
+  linkedExisting: boolean;
+  mode: 'generate' | 'invite';
+  generatedPassword: string | null;
+  invited: boolean;
+  emailSent: boolean;
+  temporaryPassword: string | null;
+}
+export const usersApi = {
+  ...crud<User>('users'),
+  provision: (body: UserProvisionInput) =>
+    api.post<UserProvisionResult>('/users/provision', body).then((r) => r.data),
+};
 export const extensionsApi = crud<Extension>('extensions');
 export const trunksApi = crud<Trunk>('trunks');
 export const didNumbersApi = crud<DIDNumber>('did_numbers');

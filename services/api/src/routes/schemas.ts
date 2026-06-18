@@ -25,6 +25,21 @@ export const userUpdate = z.object({
   mfa_enabled: z.boolean().optional(),
 });
 
+/**
+ * Provision (create-or-link) a web user for an extension. `generate` returns a
+ * one-time password to show the admin; `invite` emails the new user a login +
+ * temporary password (falls back to returning it if SMTP is off).
+ */
+export const userProvision = z.object({
+  email: z.string().email(),
+  first_name: z.string().max(80).optional(),
+  last_name: z.string().max(80).optional(),
+  role: z.enum(['admin', 'supervisor', 'agent', 'user']).default('agent'),
+  mode: z.enum(['generate', 'invite']).default('generate'),
+  /** Optional extension to link to this user (sets extensions.user_id). */
+  extension_id: z.string().uuid().optional(),
+});
+
 export const extensionCreate = z.object({
   department_id: z.string().uuid().nullable().optional(),
   extension: z.string().min(1),

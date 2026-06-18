@@ -3,8 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Pencil, Trash2, Search, Phone, RefreshCw } from 'lucide-react';
-import { extensionsApi, departmentsApi } from '@/lib/api';
+import { Plus, Pencil, Trash2, Search, Phone, RefreshCw, Copy, UserPlus, Check } from 'lucide-react';
+import { extensionsApi, departmentsApi, usersApi, type UserProvisionResult } from '@/lib/api';
 import { DataTable, Column } from '@/components/DataTable';
 import { Modal } from '@/components/Modal';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -18,18 +18,27 @@ const schema = z.object({
   display_name: z.string().min(1, 'Required'),
   sip_username: z.string().min(1, 'Required'),
   sip_password: z.string().min(6, 'Min 6 chars'),
-  type: z.enum(['sip', 'webrtc', 'virtual']),
+  type: z.enum(['softphone', 'webrtc', 'desk', 'ai_agent']),
   voicemail_enabled: z.boolean(),
-  call_recording: z.enum(['disabled', 'on_demand', 'always']),
+  call_recording: z.enum(['always', 'on-demand', 'never']),
   dnd: z.boolean(),
   ring_timeout: z.coerce.number().min(5).max(120),
   department_id: z.string().optional(),
+  // Optional web-user association (used on create only).
+  account_email: z.string().email('Invalid email').optional().or(z.literal('')),
+  account_first_name: z.string().optional(),
+  account_last_name: z.string().optional(),
+  account_role: z.enum(['admin', 'supervisor', 'agent', 'user']).optional(),
+  account_mode: z.enum(['generate', 'invite']).optional(),
 });
 
 type FormData = z.infer<typeof schema>;
 
 const TYPE_LABELS: Record<string, string> = {
-  sip: 'SIP', webrtc: 'WebRTC', virtual: 'Virtual',
+  softphone: 'Softphone', webrtc: 'WebRTC', desk: 'Desk Phone', ai_agent: 'AI Agent',
+};
+const RECORDING_LABELS: Record<string, string> = {
+  always: 'Always', 'on-demand': 'On Demand', never: 'Disabled',
 };
 
 export default function Extensions() {
@@ -39,6 +48,8 @@ export default function Extensions() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Extension | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Extension | null>(null);
+  const [provisionResult, setProvisionResult] = useState<UserProvisionResult | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['extensions', page, search],
@@ -55,27 +66,57 @@ export default function Extensions() {
     defaultValues: {
       type: 'webrtc',
       voicemail_enabled: true,
-      call_recording: 'on_demand',
+      call_recording: 'on-demand',
       dnd: false,
       ring_timeout: 30,
+      account_role: 'agent',
+      account_mode: 'generate',
     },
   });
 
   const upsert = useMutation({
-    mutationFn: (d: FormData) => {
-      const body = { ...d, department_id: d.department_id || null };
-      return editing
-        ? extensionsApi.update(editing.id, body)
-        : extensionsApi.create(body);
+    mutationFn: async (d: FormData) => {
+      const {
+        account_email, account_first_name, account_last_name, account_role, account_mode,
+        ...extData
+      } = d;
+      const body = { ...extData, department_id: extData.department_id || null };
+
+      if (editing) {
+        await extensionsApi.update(editing.id, body);
+        return { provision: null as UserProvisionResult | null };
+      }
+
+      const createdExt = await extensionsApi.create(body);
+      let provision: UserProvisionResult | null = null;
+      if (account_email && account_email.trim()) {
+        provision = await usersApi.provision({
+          email: account_email.trim(),
+          first_name: account_first_name || undefined,
+          last_name: account_last_name || undefined,
+          role: account_role ?? 'agent',
+          mode: account_mode ?? 'generate',
+          extension_id: createdExt.id,
+        });
+      }
+      return { provision };
     },
-    onSuccess: () => {
+    onSuccess: ({ provision }) => {
       queryClient.invalidateQueries({ queryKey: ['extensions'] });
+      const wasEditing = Boolean(editing);
       setModalOpen(false);
       setEditing(null);
       reset();
-      toast.success(editing ? 'Extension updated' : 'Extension created');
+      toast.success(wasEditing ? 'Extension updated' : 'Extension created');
+      if (provision) {
+        setCopied(false);
+        setProvisionResult(provision);
+      }
     },
-    onError: () => toast.error('Save failed'),
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message;
+      toast.error(msg ?? 'Save failed');
+    },
   });
 
   const deleteMut = useMutation({
@@ -93,11 +134,16 @@ export default function Extensions() {
     reset({
       type: 'webrtc',
       voicemail_enabled: true,
-      call_recording: 'on_demand',
+      call_recording: 'on-demand',
       dnd: false,
       ring_timeout: 30,
       sip_password: Array.from(crypto.getRandomValues(new Uint8Array(18)), (b) => b.toString(16).padStart(2, '0')).join(''),
       department_id: '',
+      account_email: '',
+      account_first_name: '',
+      account_last_name: '',
+      account_role: 'agent',
+      account_mode: 'generate',
     });
     setModalOpen(true);
   };
@@ -144,8 +190,15 @@ export default function Extensions() {
       header: 'Type',
       render: (row) => (
         <Badge variant={row.type === 'webrtc' ? 'accent' : 'neutral'}>
-          {TYPE_LABELS[row.type]}
+          {TYPE_LABELS[row.type] ?? row.type}
         </Badge>
+      ),
+    },
+    {
+      key: 'user_id',
+      header: 'Web user',
+      render: (row) => (
+        <Badge variant={row.user_id ? 'success' : 'neutral'}>{row.user_id ? 'Linked' : '—'}</Badge>
       ),
     },
     {
@@ -161,8 +214,8 @@ export default function Extensions() {
       key: 'call_recording',
       header: 'Recording',
       render: (row) => (
-        <Badge variant={row.call_recording === 'always' ? 'warning' : row.call_recording === 'on_demand' ? 'info' : 'neutral'}>
-          {row.call_recording.replace('_', ' ')}
+        <Badge variant={row.call_recording === 'always' ? 'warning' : row.call_recording === 'on-demand' ? 'info' : 'neutral'}>
+          {RECORDING_LABELS[row.call_recording] ?? row.call_recording}
         </Badge>
       ),
     },
@@ -177,6 +230,15 @@ export default function Extensions() {
 
   const voicemailEnabled = watch('voicemail_enabled');
   const dnd = watch('dnd');
+  const accountEmail = watch('account_email');
+  const hasAccount = Boolean(accountEmail && accountEmail.trim());
+
+  const copyPassword = (pw: string) => {
+    navigator.clipboard?.writeText(pw).then(
+      () => { setCopied(true); setTimeout(() => setCopied(false), 2000); },
+      () => toast.error('Copy failed — select and copy manually'),
+    );
+  };
 
   return (
     <div className="space-y-4">
@@ -266,8 +328,8 @@ export default function Extensions() {
               label="Type"
               options={[
                 { value: 'webrtc', label: 'WebRTC (Browser)' },
-                { value: 'sip', label: 'SIP Phone' },
-                { value: 'virtual', label: 'Virtual' },
+                { value: 'softphone', label: 'Softphone (SIP)' },
+                { value: 'desk', label: 'Desk Phone (SIP)' },
               ]}
               error={errors.type?.message}
               {...register('type')}
@@ -275,8 +337,8 @@ export default function Extensions() {
             <Select
               label="Call Recording"
               options={[
-                { value: 'disabled', label: 'Disabled' },
-                { value: 'on_demand', label: 'On Demand' },
+                { value: 'never', label: 'Disabled' },
+                { value: 'on-demand', label: 'On Demand' },
                 { value: 'always', label: 'Always' },
               ]}
               error={errors.call_recording?.message}
@@ -311,7 +373,116 @@ export default function Extensions() {
               onChange={(v) => setValue('dnd', v)}
             />
           </div>
+
+          {/* Web-user association (create only) */}
+          {!editing && (
+            <div className="rounded-xl border border-surface-200 dark:border-surface-700 p-4 space-y-4">
+              <div className="flex items-center gap-2">
+                <UserPlus size={16} className="text-primary-500" />
+                <h4 className="text-sm font-semibold text-surface-800 dark:text-surface-200">
+                  Associate a web user <span className="font-normal text-surface-400">(optional)</span>
+                </h4>
+              </div>
+              <p className="text-xs text-surface-500 -mt-2">
+                Give this extension's owner a console login. Enter their email; we'll create the
+                account (or link an existing one) and connect it to this extension.
+              </p>
+              <Input
+                label="Email address"
+                type="email"
+                placeholder="person@company.com"
+                autoComplete="off"
+                error={errors.account_email?.message}
+                {...register('account_email')}
+              />
+              {hasAccount && (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <Input label="First name" placeholder="Jane" {...register('account_first_name')} />
+                    <Input label="Last name" placeholder="Doe" {...register('account_last_name')} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <Select
+                      label="Console role"
+                      options={[
+                        { value: 'agent', label: 'Agent' },
+                        { value: 'supervisor', label: 'Supervisor' },
+                        { value: 'admin', label: 'Admin' },
+                        { value: 'user', label: 'User' },
+                      ]}
+                      {...register('account_role')}
+                    />
+                    <Select
+                      label="Set up access by"
+                      options={[
+                        { value: 'generate', label: 'Generate a password' },
+                        { value: 'invite', label: 'Email an invite' },
+                      ]}
+                      {...register('account_mode')}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </form>
+      </Modal>
+
+      {/* Provisioned-account result */}
+      <Modal
+        open={Boolean(provisionResult)}
+        onClose={() => setProvisionResult(null)}
+        title="Web user ready"
+        size="md"
+        footer={<button className="btn-primary" onClick={() => setProvisionResult(null)}>Done</button>}
+      >
+        {provisionResult && (
+          <div className="space-y-4 text-sm">
+            <p className="text-surface-700 dark:text-surface-300">
+              {provisionResult.linkedExisting
+                ? <>Linked the extension to the existing user <strong>{provisionResult.user.email}</strong>. Their current password is unchanged.</>
+                : <>Created and linked <strong>{provisionResult.user.email}</strong>.</>}
+            </p>
+
+            {provisionResult.generatedPassword && (
+              <div className="space-y-1.5">
+                <label className="label">Temporary password — copy &amp; share it securely</label>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 px-3 py-2 rounded-lg bg-surface-100 dark:bg-surface-800 font-mono text-base tracking-wide select-all">
+                    {provisionResult.generatedPassword}
+                  </code>
+                  <button className="btn-secondary btn-icon" title="Copy" onClick={() => copyPassword(provisionResult.generatedPassword!)}>
+                    {copied ? <Check size={15} className="text-emerald-500" /> : <Copy size={15} />}
+                  </button>
+                </div>
+                <p className="text-xs text-surface-400">This is shown only once. The user can change it under Settings → Security.</p>
+              </div>
+            )}
+
+            {provisionResult.invited && provisionResult.emailSent && (
+              <div className="rounded-lg bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 px-3 py-2">
+                An invite email with sign-in instructions was sent to {provisionResult.user.email}.
+              </div>
+            )}
+
+            {provisionResult.invited && !provisionResult.emailSent && provisionResult.temporaryPassword && (
+              <div className="space-y-1.5">
+                <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 px-3 py-2">
+                  Email isn't configured on this server, so the invite couldn't be sent. Share this
+                  temporary password with the user instead:
+                </div>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 px-3 py-2 rounded-lg bg-surface-100 dark:bg-surface-800 font-mono text-base tracking-wide select-all">
+                    {provisionResult.temporaryPassword}
+                  </code>
+                  <button className="btn-secondary btn-icon" title="Copy" onClick={() => copyPassword(provisionResult.temporaryPassword!)}>
+                    {copied ? <Check size={15} className="text-emerald-500" /> : <Copy size={15} />}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </Modal>
 
       {/* Delete confirmation */}

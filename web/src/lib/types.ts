@@ -39,8 +39,8 @@ export interface AuthTokens {
 
 // ─── Extensions ──────────────────────────────────────────────────────────────
 
-export type ExtensionType = 'sip' | 'webrtc' | 'virtual';
-export type RecordingMode = 'disabled' | 'on_demand' | 'always';
+export type ExtensionType = 'softphone' | 'webrtc' | 'desk' | 'ai_agent';
+export type RecordingMode = 'always' | 'on-demand' | 'never';
 
 export interface Extension {
   id: string;

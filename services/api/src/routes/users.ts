@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { query, queryOne } from '../db.js';
 import { audit } from '../audit.js';
 import { conflict, notFound } from '../errors.js';
-import { hashPassword } from '../auth/passwords.js';
+import { hashPassword, generatePassword } from '../auth/passwords.js';
 import {
   parse,
   requireAuth,
@@ -12,7 +12,7 @@ import {
   created,
   clientIp,
 } from './helpers.js';
-import { userCreate, userUpdate } from './schemas.js';
+import { userCreate, userUpdate, userProvision } from './schemas.js';
 import type { UserRow } from '../types/db.js';
 
 const publicCols =
@@ -65,6 +65,85 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
     );
     await audit(auth, { action: 'users.create', entity: 'user', entityId: String(row!.id), ip: clientIp(request) });
     return created(reply, row);
+  });
+
+  // Provision (create-or-link) a web user for an extension, returning a
+  // generated password to display once, or emailing an invite. Used by the
+  // "associate a web user" option in the extension form.
+  app.post('/users/provision', writeGuard, async (request, reply) => {
+    const auth = requireAuth(request);
+    const data = parse(userProvision, request.body);
+    const email = data.email.trim().toLowerCase();
+
+    let user = await queryOne<{
+      id: string; email: string; first_name: string | null; last_name: string | null; role: string;
+    }>(
+      `SELECT id, email, first_name, last_name, role FROM users WHERE tenant_id = $1 AND lower(email) = $2`,
+      [auth.tenantId, email],
+    );
+
+    let generated: string | null = null;
+    const linkedExisting = Boolean(user);
+
+    if (!user) {
+      generated = generatePassword();
+      user = await queryOne(
+        `INSERT INTO users (tenant_id, email, password_hash, first_name, last_name, role, is_active)
+         VALUES ($1,$2,$3,$4,$5,$6,true)
+         RETURNING id, email, first_name, last_name, role`,
+        [auth.tenantId, email, await hashPassword(generated), data.first_name ?? null, data.last_name ?? null, data.role],
+      );
+      await audit(auth, { action: 'users.create', entity: 'user', entityId: String(user!.id), ip: clientIp(request) });
+    }
+
+    // Optionally link the extension to this user.
+    if (data.extension_id) {
+      const linked = await queryOne(
+        `UPDATE extensions SET user_id = $1, updated_at = now() WHERE id = $2 AND tenant_id = $3 RETURNING id`,
+        [user!.id, data.extension_id, auth.tenantId],
+      );
+      if (!linked) throw notFound('Extension not found');
+    }
+
+    // Invite mode: email the new user a login link + temporary password.
+    let emailSent = false;
+    let temporaryPassword: string | null = null;
+    if (data.mode === 'invite' && generated) {
+      const cfg = app.ctx.config;
+      const base = cfg.corsOrigins[0] ?? (cfg.domain ? `https://${cfg.domain}` : '');
+      if (app.ctx.email.enabled) {
+        try {
+          await app.ctx.email.send({
+            to: email,
+            subject: 'Your AIpbx account is ready',
+            text:
+              `An account was created for you on AIpbx.\n\n` +
+              `Sign in: ${base || '(ask your administrator for the URL)'}/login\n` +
+              `Email: ${email}\n` +
+              `Temporary password: ${generated}\n\n` +
+              `Please sign in and change your password under Settings → Security.`,
+          });
+          emailSent = true;
+        } catch {
+          emailSent = false;
+        }
+      }
+      // If we couldn't email it, hand the temp password back so the admin can deliver it.
+      if (!emailSent) temporaryPassword = generated;
+    }
+
+    await audit(auth, { action: 'users.provision', entity: 'user', entityId: String(user!.id), ip: clientIp(request) });
+
+    return reply.send({
+      user: { id: user!.id, email: user!.email, first_name: user!.first_name, last_name: user!.last_name, role: user!.role },
+      linkedExisting,
+      mode: data.mode,
+      // Only surface a password when we actually created one and aren't emailing it.
+      generatedPassword: data.mode === 'generate' ? generated : null,
+      invited: data.mode === 'invite' && !linkedExisting,
+      emailSent,
+      temporaryPassword,
+    });
   });
 
   app.patch('/users/:id', writeGuard, async (request, reply) => {
