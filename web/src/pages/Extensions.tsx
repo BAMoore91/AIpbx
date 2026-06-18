@@ -82,26 +82,35 @@ export default function Extensions() {
       } = d;
       const body = { ...extData, department_id: extData.department_id || null };
 
-      if (editing) {
-        await extensionsApi.update(editing.id, body);
-        return { provision: null as UserProvisionResult | null };
-      }
+      // 1) Save the extension itself. A failure here is a real "save failed".
+      const ext = editing
+        ? await extensionsApi.update(editing.id, body)
+        : await extensionsApi.create(body);
 
-      const createdExt = await extensionsApi.create(body);
-      let provision: UserProvisionResult | null = null;
-      if (account_email && account_email.trim()) {
-        provision = await usersApi.provision({
-          email: account_email.trim(),
+      // 2) Optionally associate a web user. This is a SEPARATE step: if it
+      //    fails, the extension is already saved, so surface a precise warning
+      //    rather than a misleading "save failed".
+      const wantsAccount =
+        Boolean(account_email && account_email.trim()) && !editing?.user_id;
+      if (!wantsAccount) return { provision: null as UserProvisionResult | null, accountError: null as string | null };
+
+      try {
+        const provision = await usersApi.provision({
+          email: account_email!.trim(),
           first_name: account_first_name || undefined,
           last_name: account_last_name || undefined,
           role: account_role ?? 'agent',
           mode: account_mode ?? 'generate',
-          extension_id: createdExt.id,
+          extension_id: ext.id,
         });
+        return { provision, accountError: null as string | null };
+      } catch (e: unknown) {
+        const r = (e as { response?: { status?: number; data?: { error?: { message?: string } } } })?.response;
+        const reason = r?.data?.error?.message ?? (r ? `HTTP ${r.status}` : 'network error');
+        return { provision: null as UserProvisionResult | null, accountError: reason };
       }
-      return { provision };
     },
-    onSuccess: ({ provision }) => {
+    onSuccess: ({ provision, accountError }) => {
       queryClient.invalidateQueries({ queryKey: ['extensions'] });
       const wasEditing = Boolean(editing);
       setModalOpen(false);
@@ -111,11 +120,14 @@ export default function Extensions() {
       if (provision) {
         setCopied(false);
         setProvisionResult(provision);
+      } else if (accountError) {
+        // The extension was saved; only the web-user link failed.
+        toast.error(`Extension saved, but the web user couldn't be set up: ${accountError}`, { duration: 7000 });
       }
     },
     onError: (err: unknown) => {
       const msg = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message;
-      toast.error(msg ?? 'Save failed');
+      toast.error(msg ? `Save failed: ${msg}` : 'Save failed');
     },
   });
 
@@ -161,6 +173,11 @@ export default function Extensions() {
       dnd: ext.dnd,
       ring_timeout: ext.ring_timeout,
       department_id: (ext as Extension & { department_id?: string }).department_id ?? '',
+      account_email: '',
+      account_first_name: '',
+      account_last_name: '',
+      account_role: 'agent',
+      account_mode: 'generate',
     });
     setModalOpen(true);
   };
@@ -374,8 +391,19 @@ export default function Extensions() {
             />
           </div>
 
-          {/* Web-user association (create only) */}
-          {!editing && (
+          {/* Already-linked note (edit of a linked extension) */}
+          {editing?.user_id && (
+            <div className="rounded-xl border border-surface-200 dark:border-surface-700 p-4 flex items-center gap-2">
+              <UserPlus size={16} className="text-emerald-500" />
+              <p className="text-sm text-surface-600 dark:text-surface-300">
+                This extension is already linked to a web user. Manage the account from the{' '}
+                <strong>Users</strong> page.
+              </p>
+            </div>
+          )}
+
+          {/* Web-user association (create, or edit of an unlinked extension) */}
+          {!editing?.user_id && (
             <div className="rounded-xl border border-surface-200 dark:border-surface-700 p-4 space-y-4">
               <div className="flex items-center gap-2">
                 <UserPlus size={16} className="text-primary-500" />
